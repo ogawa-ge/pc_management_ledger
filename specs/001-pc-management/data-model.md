@@ -41,6 +41,17 @@
 | `condition` | String | PCの状態 (例: `Initialized`, `Broken`, etc.) |
 | `createdAt` | String | 申請日時 (ISO 8601) |
 
+### PC Usage History (DynamoDB Table: `PCUsageHistories`)
+
+| Field | Type | Description |
+|---|---|---|
+| `historyId` | String (PK) | 履歴の一意のID (UUID等) |
+| `pcId` | String (GSI PK) | 対象のPC管理番号 |
+| `userId` | String | 利用者の `userId` |
+| `status` | String | 履歴記録時のステータス (`InUse`, `Unused`, `PendingDisposal`, `Disposed`) |
+| `reason` | String | 返却理由（返却時など） |
+| `date` | String | 履歴の日付 (ISO 8601) |
+
 ## State Transitions (PC Status)
 
 1. **新規登録時**:
