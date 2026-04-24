@@ -21,9 +21,9 @@ graph TD
 
 **目標**: プロジェクト構造とコアとなる依存関係を初期化する。
 
-- [ ] T001 `frontend/` にNext.jsプロジェクトを初期化する
-- [ ] T002 [P] `backend/lambda/` にPython環境とFastAPIをセットアップする
-- [ ] T003 [P] `backend/ecs/` にPython環境とFastAPIをセットアップする
+- [x] T001 `frontend/` にNext.jsプロジェクトを初期化する
+- [x] T002 [P] `backend/lambda/` にPython環境とFastAPIをセットアップする
+- [x] T003 [P] `backend/ecs/` にPython環境とFastAPIをセットアップする
 - [ ] T004 [P] `infrastructure/` にAWS CDKプロジェクトを初期化する
 - [ ] T005 [P] `docs/session-notes.md`、`docs/backlog.md`、`docs/troubleshooting.md`、`docs/ubiquitous-language.md` を作成し、初期化する
 
