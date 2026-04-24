@@ -25,7 +25,11 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-- [x] Core Principles: No specific principles defined in default constitution.
+- [x] Core Principles:
+  - Layer 1: 出力言語は日本語。スキーマ推測の禁止 (`data-model.md` と `contracts/` を厳密に参照)。セキュリティファースト (実データ・キーを含めず、環境変数やダミーデータを使用)。
+  - Layer 2: プロジェクトミッションはAWSコスト最適化とGemini APIによるPCスペック登録の完全自動化。
+  - Layer 3: 開発ポリシー: ハイブリッド責任モデル (ログイン/軽量処理はLambda、重い処理/管理者はECS)、コスト意識 (ECS自動スリープ、ALB回避)、クリーンコード、Kebab-case命名、AIロジック (LLMによる柔軟なパース)。
+  - Layer 4: ドキュメント運用: `docs/session-notes.md`、`docs/backlog.md`、`docs/troubleshooting.md` の維持・更新。
 
 ## Project Structure
 

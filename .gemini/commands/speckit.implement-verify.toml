@@ -1,0 +1,28 @@
+description = "Validate the completed implementation against the specifications and run tests."
+
+prompt = """
+---
+description: Validate the completed implementation against the specifications and run tests.
+---
+
+## User Input
+```text
+$ARGUMENTS
+```
+You **MUST** consider the user input before proceeding (if not empty).
+
+## Outline
+
+1. **Completion Validation**:
+   - Read `tasks.md` and verify that ALL required tasks are completed (`- [x]`).
+   - If any tasks are incomplete (`- [ ]`), notify the user and suggest running `/speckit.implement-next` first.
+
+2. **Quality & Requirement Check**:
+   - Check that implemented features match the original specification defined in `plan.md`, `data-model.md`, and `contracts/`.
+   - Validate that tests pass and coverage meets requirements. Run the project's test suite if available.
+   - Confirm the implementation follows the technical plan and architecture.
+
+3. **Final Status Report**:
+   - Report the final status with a summary of completed work.
+   - Highlight any warnings, missing edge cases, or recommendations for future polish.
+"""
