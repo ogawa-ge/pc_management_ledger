@@ -7,7 +7,7 @@ description: Perform pre-implementation environment and checklist verification.
 
 ## Outline
 
-1. Run `.specify/scripts/bash/check-prerequisites.sh --json --require-tasks --include-tasks` from repo root and parse FEATURE_DIR and AVAILABLE_DOCS list.
+1. Run `.specify/scripts/powershell/check-prerequisites.ps1 --json --require-tasks --include-tasks` from repo root and parse FEATURE_DIR and AVAILABLE_DOCS list.
 
 2. **Check checklists status** (if FEATURE_DIR/checklists/ exists):
    - Scan all checklist files. Count Total, Completed (`- [X]`, `- [x]`), and Incomplete (`- [ ]`) items.
