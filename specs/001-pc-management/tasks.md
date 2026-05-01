@@ -24,27 +24,27 @@ graph TD
 - [x] T001 `frontend/` にNext.jsプロジェクトを初期化する
 - [x] T002 [P] `backend/lambda/` にPython環境とFastAPIをセットアップする
 - [x] T003 [P] `backend/ecs/` にPython環境とFastAPIをセットアップする
-- [ ] T004 [P] `infrastructure/` にAWS CDKプロジェクトを初期化する
-- [ ] T005 [P] `docs/session-notes.md`、`docs/backlog.md`、`docs/troubleshooting.md`、`docs/ubiquitous-language.md` を作成し、初期化する
+- [x] T004 [P] `infrastructure/` にAWS CDKプロジェクトを初期化する
+- [x] T005 [P] `docs/session-notes.md`、`docs/backlog.md`、`docs/troubleshooting.md`、`docs/ubiquitous-language.md` を作成し、初期化する
 
 ## フェーズ 2: 基盤構築
 
 **目標**: 共有インフラストラクチャと基盤となるコンポーネントをセットアップする。
 
-- [ ] T005 `infrastructure/stacks/database-stack.py` でDynamoDBテーブル (Users, PCs, ReturnRecords, PCUsageHistories) を定義する
-- [ ] T006 `infrastructure/stacks/lambda-stack.py` でLambda関数のインフラを実装する
-- [ ] T007 `infrastructure/stacks/ecs-stack.py` でECSクラスターとタスク定義を実装する
-- [ ] T008 [P] `backend/lambda/src/db.py` で共有のDynamoDBクライアントを実装する
-- [ ] T009 [P] `backend/ecs/src/db.py` で共有のDynamoDBクライアントを実装する
+- [x] T006b `infrastructure/stacks/database-stack.py` でDynamoDBテーブル (Users, PCs, ReturnRecords, PCUsageHistories) を定義する
+- [x] T006 `infrastructure/stacks/lambda-stack.py` でLambda関数のインフラを実装する
+- [x] T007 `infrastructure/stacks/ecs-stack.py` でECSクラスターとタスク定義を実装する
+- [x] T008 [P] `backend/lambda/src/db.py` で共有のDynamoDBクライアントを実装する
+- [x] T009 [P] `backend/ecs/src/db.py` で共有のDynamoDBクライアントを実装する
 
 ## フェーズ 3: Microsoftアカウントログイン [US1]
 
 **目標**: ユーザーはMicrosoftアカウントを使用してシステムにログインし、適切な権限でアクセスできる。
 **独立テスト**: Microsoftアカウントでのログインが成功し、ユーザーの権限に応じた画面が表示されることを確認する。
 
-- [ ] T010 [US1] `frontend/src/app/api/auth/[...nextauth]/route.ts` でAzure ADプロバイダーを使用したnext-authを設定する
-- [ ] T011 [US1] `frontend/src/app/login/page.tsx` でログインページのUIを実装する
-- [ ] T012 [US1] `frontend/src/middleware.ts` で保護されたルート用の認証ミドルウェアを実装する
+- [x] T010 [US1] `frontend/src/app/api/auth/[...nextauth]/route.ts` でAzure ADプロバイダーを使用したnext-authを設定する
+- [x] T011 [US1] `frontend/src/app/login/page.tsx` でログインページのUIを実装する
+- [x] T012 [US1] `frontend/src/middleware.ts` で保護されたルート用の認証ミドルウェアを実装する
 - [ ] T013 [US1] `backend/lambda/src/main.py` で認証APIエンドポイントを作成する
 - [ ] T014 [US1] `backend/lambda/src/services/auth-service.py` でユーザー権限の検証ロジックを実装する
 
