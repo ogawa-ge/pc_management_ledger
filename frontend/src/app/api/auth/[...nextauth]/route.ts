@@ -1,5 +1,6 @@
 import NextAuth from 'next-auth';
 import AzureADProvider from 'next-auth/providers/azure-ad';
+import { get_user_permissions } from '@/src/lib/auth-service';
 
 export const authOptions = {
   providers: [
@@ -20,6 +21,18 @@ export const authOptions = {
     async session({ session, token }) {
       // セッションにアクセストークンを追加
       session.accessToken = token.accessToken;
+      // JWTトークンからユーザーIDを取得し、権限を取得してセッションに追加
+      if (token && token.sub) {
+        try {
+          const permissions = await get_user_permissions(token.sub);
+          session.user = {
+            ...session.user,
+            permissions: permissions,
+          };
+        } catch (error) {
+          console.error('権限の取得に失敗しました:', error);
+        }
+      }
       return session;
     },
   },

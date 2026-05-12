@@ -45,17 +45,17 @@ graph TD
 - [x] T010 [US1] `frontend/src/app/api/auth/[...nextauth]/route.ts` でAzure ADプロバイダーを使用したnext-authを設定する
 - [x] T011 [US1] `frontend/src/app/login/page.tsx` でログインページのUIを実装する
 - [x] T012 [US1] `frontend/src/middleware.ts` で保護されたルート用の認証ミドルウェアを実装する
-- [ ] T013 [US1] `backend/lambda/src/main.py` で認証APIエンドポイントを作成する
-- [ ] T014 [US1] `backend/lambda/src/services/auth-service.py` でユーザー権限の検証ロジックを実装する
+- [x] T013 [US1] `backend/lambda/src/main.py` で認証APIエンドポイントを作成する
+- [x] T014 [US1] `backend/lambda/src/services/auth-service.py` でユーザー権限の検証ロジックを実装する
 
 ## フェーズ 4: 権限管理 [US3.5]
 
 **目標**: システム内で管理者と一般ユーザーの権限を管理する。
 **独立テスト**: テーブルの権限値を手動で変更し、その権限に応じたアクセス制御が機能することを確認する。
 
-- [ ] T015 [US3.5] `backend/lambda/src/models/user.py` でUserモデルとリポジトリを作成する
-- [ ] T016 [US3.5] `frontend/src/lib/rbac.ts` でロールベースのアクセス制御 (RBAC) ユーティリティを実装する
-- [ ] T017 [US3.5] `frontend/src/app/api/auth/[...nextauth]/route.ts` で認証セッションにユーザー権限を含めるよう更新する
+- [x] T015 [US3.5] `backend/lambda/src/models/user.py` でUserモデルとリポジトリを作成する
+- [x] T016 [US3.5] `frontend/src/lib/rbac.ts` でロールベースのアクセス制御 (RBAC) ユーティリティを実装する
+- [x] T017 [US3.5] `frontend/src/app/api/auth/[...nextauth]/route.ts` で認証セッションにユーザー権限を含めるよう更新する
 
 ## フェーズ 5: ユーザーによるPC登録 [US2]
 

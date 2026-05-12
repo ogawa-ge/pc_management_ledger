@@ -1,9 +1,13 @@
 from typing import Optional, Dict, Any
 from jose import JWTError, jwt
 from fastapi import HTTPException, status
+import os
+
+# DynamoDBクライアントの初期化
+from db import dynamodb
 
 # JWTの秘密鍵（実際の運用では環境変数から取得する）
-SECRET_KEY = "your-secret-key"
+SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key")
 ALGORITHM = "HS256"
 
 def verify_token(token: str) -> Dict[str, Any]:
@@ -22,18 +26,23 @@ def verify_token(token: str) -> Dict[str, Any]:
 
 def get_user_permissions(user_id: str) -> list:
     """
-    ユーザーの権限を取得する（実際の実装ではDBから取得）
+    DBからユーザーの権限を取得する
     """
-    # 仮の権限データ
-    permissions = {
-        "admin": ["read", "write", "delete", "manage_users"],
-        "user": ["read", "write"],
-        "guest": ["read"]
-    }
-    
-    # 実際の実装では、DBからユーザー情報を取得し、権限を取得する
-    # ここでは簡略化のために、固定の権限を返す
-    return permissions.get("user", [])
+    try:
+        # Usersテーブルからユーザー情報を取得
+        table = dynamodb.Table('Users')
+        response = table.get_item(Key={'user_id': user_id})
+        user = response.get('Item')
+        
+        if not user:
+            return []
+            
+        # ユーザーの権限を返す
+        return user.get('permissions', [])
+    except Exception as e:
+        # エラーが発生した場合はログを出力し、空の権限を返す
+        print(f"Error getting user permissions: {e}")
+        return []
 
 def check_permission(user_id: str, required_permission: str) -> bool:
     """
