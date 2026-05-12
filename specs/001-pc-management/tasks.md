@@ -62,14 +62,14 @@ graph TD
 **目標**: 一般ユーザーは自分のPCをシステムに登録し、スペック情報を簡単に入力できる。
 **独立テスト**: ユーザーがターミナルを起動した際にスペック取得コマンドが実行され、その結果がフォームに反映された後、Gemini APIによって整形されたデータが正しく登録され、適切な管理番号が付与されることを確認する。
 
-- [ ] T018 [US2] `backend/ecs/src/models/pc.py` でPCモデルとリポジトリを実装する
-- [ ] T019 [US2] `backend/ecs/src/services/gemini-service.py` でGemini API連携サービスを作成する
-- [ ] T020 [US2] `backend/ecs/src/main.py` でスペック解析エンドポイント `/api/pcs/parse-specs` を実装する
-- [ ] T021 [US2] `backend/ecs/src/main.py` でPC登録エンドポイント `/api/pcs` を実装する
-- [ ] T022 [US2] `backend/ecs/src/services/pc-service.py` で自動採番ロジック (N-XXX, D-XXX) を実装する
-- [ ] T023 [US2] `frontend/src/app/pcs/register/page.tsx` でPC登録フォームのUIを作成する
-- [ ] T024 [US2] `frontend/src/components/terminal-command.tsx` でターミナルコマンドの生成とクリップボードへのコピー機能を実装する
-- [ ] T025 [US2] `frontend/src/services/pc-api.ts` でフロントエンドのフォームとparse-specsおよび登録APIを統合する
+- [x] T018 [US2] `backend/ecs/src/models/pc.py` でPCモデルとリポジトリを実装する
+- [x] T019 [US2] `backend/ecs/src/services/gemini-service.py` でGemini API連携サービスを作成する
+- [x] T020 [US2] `backend/ecs/src/main.py` でスペック解析エンドポイント `/api/pcs/parse-specs` を実装する
+- [x] T021 [US2] `backend/ecs/src/main.py` でPC登録エンドポイント `/api/pcs` を実装する
+- [x] T022 [US2] `backend/ecs/src/services/pc-service.py` で自動採番ロジック (N-XXX, D-XXX) を実装する
+- [x] T023 [US2] `frontend/src/app/pcs/register/page.tsx` でPC登録フォームのUIを作成する
+- [x] T024 [US2] `frontend/src/components/terminal-command.tsx` でターミナルコマンドの生成とクリップボードへのコピー機能を実装する
+- [x] T025 [US2] `frontend/src/services/pc-api.ts` でフロントエンドのフォームとparse-specsおよび登録APIを統合する
 
 ## フェーズ 6: 管理者によるPC代理登録 [US3]
 
