@@ -1,0 +1,36 @@
+description = "Implement SPECIFIC tasks by providing their Task IDs as arguments."
+
+prompt = """
+---
+description: Implement ONLY the specifically requested tasks from tasks.md while strictly following the project constitution.
+---
+
+## User Input
+```text
+$ARGUMENTS
+```
+
+## Critical Execution Rules
+1. **REQUIREMENT**: You MUST check the User Input ($ARGUMENTS). If the user did not provide any specific Task IDs, you MUST STOP immediately and ask the user to provide Task IDs (e.g., `/speckit.implement-task Task-1`).
+2. **STRICT ISOLATION**: Implement ONLY the Task IDs specified in the user input. Do NOT automatically proceed to the next incomplete task.
+3. **CONSTITUTION COMPLIANCE**: You MUST strictly follow the global directives, coding standards, and architectural policies defined in `.specify/memory/constitution.md` throughout the implementation.
+
+## Outline
+
+1. **Context Loading**: 
+   - **READ CONSTITUTION**: First, read `.specify/memory/constitution.md` to ensure all output and code adhere to the project's foundational rules (e.g., Output Language, Security First, Kebab-case Naming, Architecture Integrity).
+   - Read `tasks.md`. Find the specific tasks matching the IDs provided in the User Input.
+   - Read ONLY the files directly related to these specific tasks (e.g., `plan.md`, `data-model.md`, or existing source code).
+
+2. **Execute Implementation**:
+   - Write or update the code for the requested tasks only, keeping the `constitution.md` rules in mind at all times.
+   - Run or write tests if applicable to the task.
+
+3. **Progress Tracking (MANDATORY)**:
+   - Upon successful implementation, you MUST update `tasks.md`.
+   - Find the exact line for the completed task and change the unchecked box `- [ ]` to a checked box `- [x]`. Save the file.
+
+4. **Completion & HALT**:
+   - Summarize what was implemented (Output MUST be in the language specified in `constitution.md`).
+   - **STOP EXECUTION.** Do NOT start or suggest starting the next task on your own. Wait for the user's next command.
+"""
