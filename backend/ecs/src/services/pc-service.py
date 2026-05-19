@@ -1,8 +1,10 @@
 from typing import Dict, Any
 from backend.ecs.src.models.pc import Pc, PcRepository
 from backend.ecs.src.services.gemini_service import parse_specs
+from backend.ecs.src.models.return_record import ReturnRecord, ReturnRecordRepository
 from datetime import datetime
 import re
+from fastapi import HTTPException
 
 def generate_pc_id(owner_id: str, pc_type: str) -> str:
     """
@@ -33,12 +35,17 @@ def generate_pc_id(owner_id: str, pc_type: str) -> str:
     new_number = max_number + 1
     return f"{pc_type}-{new_number:03d}"
 
-def create_pc(owner_id: str, specs_text: str, pc_type: str = "N") -> Dict[str, Any]:
+def create_pc(owner_id: str = None, specs_text: str = None, pc_type: str = "N") -> Dict[str, Any]:
     """
     PCを新規作成
     """
     # スペックを解析
     parsed_specs = parse_specs(specs_text)
+    
+    # owner_idが指定されていない場合は、認証情報から取得するなどの処理が必要（仮実装）
+    # ここでは、owner_idが指定されていない場合はエラーとする
+    if owner_id is None:
+        raise HTTPException(status_code=400, detail="owner_id is required")
     
     # PC IDを生成
     pc_id = generate_pc_id(owner_id, pc_type)
@@ -64,3 +71,33 @@ def create_pc(owner_id: str, specs_text: str, pc_type: str = "N") -> Dict[str, A
     created_pc = repository.create_pc(pc)
     
     return created_pc.dict()
+
+async def process_pc_return(pc_id: str, user_id: str, return_reason: str, pc_status_at_return: str) -> Dict[str, Any]:
+    """
+    PCの返却処理を実行し、返却記録を作成し、PCのステータスを更新する。
+    """
+    # 1. 返却記録の作成
+    return_repo = ReturnRecordRepository()
+    
+    # UUIDを生成するロジックが必要だが、ここでは仮のIDを使用
+    record_id = f"RET-{pc_id}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    
+    return_record = ReturnRecord(
+        record_id=record_id,
+        pc_id=pc_id,
+        user_id=user_id,
+        return_date=datetime.now(),
+        return_reason=return_reason,
+        pc_status_at_return=pc_status_at_return,
+        # created_atはデフォルトで設定される
+    )
+    
+    # 記録を保存
+    await return_repo.create_record(return_record)
+    
+    # 2. PCのステータス更新 (仮実装: PcRepositoryにupdate_pc_statusメソッドが必要)
+    pc_repo = PcRepository()
+    # 実際のDB操作をシミュレート
+    # await pc_repo.update_pc_status(pc_id, "Returned")
+    
+    return {"message": f"PC ID {pc_id} の返却処理が正常に完了しました。記録ID: {record_id}"}

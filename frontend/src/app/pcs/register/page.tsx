@@ -7,22 +7,42 @@ import { useRouter } from 'next/navigation';
 const PCRegisterPage = () => {
   const [pcName, setPcName] = useState('');
   const [os, setOs] = useState('');
-  const [cpu, setCpu] = useState('');
-  const [memory, setMemory] = useState('');
-  const [storage, setStorage] = useState('');
-  const [gpu, setGpu] = useState('');
+  const [ownerId, setOwnerId] = useState('');
+  const [users, setUsers] = useState<any[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const router = useRouter();
 
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const userList = await getUsers();
+        setUsers(userList);
+        // デフォルトで最初のユーザーをオーナーとして設定
+        if (userList.length > 0) {
+          setOwnerId(userList[0].id);
+        }
+      } catch (error) {
+        console.error('ユーザーリストの取得に失敗しました:', error);
+      }
+    };
+    fetchUsers();
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!ownerId) {
+      alert('オーナーユーザーを選択してください。');
+      return;
+    }
     setIsSubmitting(true);
-    
+
     try {
-      // ここにAPI呼び出しのロジックを実装
-      // 今回は仮の実装
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // API呼び出しのロジックを実装
+      const specsText = await parseSpecs(terminalCommand);
+      const result = await registerPC(ownerId, specsText, 'N');
+      
+      console.log('登録成功:', result);
       setSubmitSuccess(true);
       // 登録成功後に一覧ページにリダイレクト
       setTimeout(() => {

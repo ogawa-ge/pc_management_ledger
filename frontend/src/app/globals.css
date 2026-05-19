@@ -1,0 +1,55 @@
+/*
+  PC Management Ledger - Global Styles
+  T032: Responsive Design for PC Management Ledger
+  
+  This file ensures that the PC management ledger UI is responsive across various devices.
+  It extends the base Tailwind CSS utilities with specific layout adjustments for the ledger view.
+*/
+
+/* Base styles for the entire application */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* -------------------------------------------------------------------
+   T032: PC Management Ledger Specific Responsive Adjustments
+   ------------------------------------------------------------------- */
+
+/* General container padding adjustments for smaller screens */
+.container {
+  @apply px-4 sm:px-6 lg:px-8;
+}
+
+/* Table responsiveness: On small screens, the table might overflow or become too cramped.
+   We ensure that the table content is scrollable horizontally if necessary, 
+   but maintain readability on larger screens. */
+.min-w-full {
+  @apply overflow-x-auto; /* Allows horizontal scrolling if content exceeds screen width */
+}
+
+/* Adjusting table cell padding for mobile view */
+.text-xs.uppercase.tracking-wider.text-gray-500 {
+  @apply py-2 sm:py-3; /* Slightly less padding on mobile */
+}
+
+/* Specific adjustments for the status badge to ensure visibility */
+.text-xs.leading-5 {
+  @apply py-1 px-2; /* Consistent padding for status badges */
+}
+
+/* Media query for tablet/small desktop view (e.g., 768px) */
+@media (min-width: 768px) {
+  /* On tablets, we might want to adjust column widths slightly */
+  .min-w-full table > :nth-child(2) {
+    /* User column */
+    min-width: 150px;
+  }
+}
+
+/* Media query for large desktop view (e.g., 1280px) */
+@media (min-width: 1280px) {
+  /* On large screens, ensure the main content area utilizes space effectively */
+  .container {
+    max-width: 1400px; /* Limit max width for better readability */
+  }
+}

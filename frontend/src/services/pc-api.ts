@@ -69,6 +69,28 @@ export const getPCs = async () => {
   }
 };
 
+// ユーザー一覧取得
+export const getUsers = async () => {
+  try {
+    const response = await fetch('/api/users', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    console.error('ユーザー一覧取得エラー:', error);
+    throw error;
+  }
+};
+
 // PC返却
 export const returnPC = async (pcId: string, returnData: { returnDate: string; returnReason: string; condition: string }) => {
   try {

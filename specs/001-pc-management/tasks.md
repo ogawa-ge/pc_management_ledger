@@ -1,18 +1,18 @@
-# 実装タスク: PC管理台帳
+# 実装タスク：PC 管理台帳
 
 ## 依存関係
 
 ```mermaid
 graph TD
     Setup[フェーズ 1: セットアップ] --> Foundation[フェーズ 2: 基盤構築]
-    Foundation --> US1[US1: Microsoftアカウントログイン]
+    Foundation --> US1[US1: Microsoft アカウントログイン]
     Foundation --> US3_5[US3.5: 権限管理]
-    US1 --> US2[US2: ユーザーによるPC登録]
-    US1 --> US4[US4: PCおよびユーザー一覧の確認]
-    US3_5 --> US3[US3: 管理者によるPC代理登録]
-    US2 --> US5[US5: PC返却プロセス]
-    US4 --> US6[US6: 未使用PC一覧の確認]
-    US5 --> Polish[最終フェーズ: 仕上げ]
+    US1 --> US2[US2: ユーザーによる PC 登録]
+    US1 --> US4[US4: PC およびユーザー一覧の確認]
+    US3_5 --> US3[US3: 管理者による PC 代理登録]
+    US2 --> US5[US5: PC 返却プロセス]
+    US4 --> US6[US6: 未使用 PC 一覧の確認]
+    US5 --> Polish[最終フェーズ：仕上げ]
     US6 --> Polish
     US3 --> Polish
 ```
@@ -21,31 +21,31 @@ graph TD
 
 **目標**: プロジェクト構造とコアとなる依存関係を初期化する。
 
-- [x] T001 `frontend/` にNext.jsプロジェクトを初期化する
-- [x] T002 [P] `backend/lambda/` にPython環境とFastAPIをセットアップする
-- [x] T003 [P] `backend/ecs/` にPython環境とFastAPIをセットアップする
-- [x] T004 [P] `infrastructure/` にAWS CDKプロジェクトを初期化する
+- [x] T001 `frontend/` に Next.js プロジェクトを初期化する
+- [x] T002 [P] `backend/lambda/` に Python 環境と FastAPI をセットアップする
+- [x] T003 [P] `backend/ecs/` に Python 環境と FastAPI をセットアップする
+- [x] T004 [P] `infrastructure/` に AWS CDK プロジェクトを初期化する
 - [x] T005 [P] `docs/session-notes.md`、`docs/backlog.md`、`docs/troubleshooting.md`、`docs/ubiquitous-language.md` を作成し、初期化する
 
 ## フェーズ 2: 基盤構築
 
 **目標**: 共有インフラストラクチャと基盤となるコンポーネントをセットアップする。
 
-- [x] T006b `infrastructure/stacks/database-stack.py` でDynamoDBテーブル (Users, PCs, ReturnRecords, PCUsageHistories) を定義する
-- [x] T006 `infrastructure/stacks/lambda-stack.py` でLambda関数のインフラを実装する
-- [x] T007 `infrastructure/stacks/ecs-stack.py` でECSクラスターとタスク定義を実装する
-- [x] T008 [P] `backend/lambda/src/db.py` で共有のDynamoDBクライアントを実装する
-- [x] T009 [P] `backend/ecs/src/db.py` で共有のDynamoDBクライアントを実装する
+- [x] T006b `infrastructure/stacks/database-stack.py` で DynamoDB テーブル (Users, PCs, ReturnRecords, PCUsageHistories) を定義する
+- [x] T006 `infrastructure/stacks/lambda-stack.py` で Lambda 関数のインフラを実装する
+- [x] T007 `infrastructure/stacks/ecs-stack.py` で ECS クラスターとタスク定義を実装する
+- [x] T008 [P] `backend/lambda/src/db.py` で共有の DynamoDB クライアントを実装する
+- [x] T009 [P] `backend/ecs/src/db.py` で共有の DynamoDB クライアントを実装する
 
-## フェーズ 3: Microsoftアカウントログイン [US1]
+## フェーズ 3: Microsoft アカウントログイン [US1]
 
-**目標**: ユーザーはMicrosoftアカウントを使用してシステムにログインし、適切な権限でアクセスできる。
-**独立テスト**: Microsoftアカウントでのログインが成功し、ユーザーの権限に応じた画面が表示されることを確認する。
+**目標**: ユーザーは Microsoft アカウントを使用してシステムにログインし、適切な権限でアクセスできる。
+**独立テスト**: Microsoft アカウントでのログインが成功し、ユーザーの権限に応じた画面が表示されることを確認する。
 
-- [x] T010 [US1] `frontend/src/app/api/auth/[...nextauth]/route.ts` でAzure ADプロバイダーを使用したnext-authを設定する
-- [x] T011 [US1] `frontend/src/app/login/page.tsx` でログインページのUIを実装する
+- [x] T010 [US1] `frontend/src/app/api/auth/[...nextauth]/route.ts` で Azure AD プロバイダーを使用した next-auth を設定する
+- [x] T011 [US1] `frontend/src/app/login/page.tsx` でログインページの UI を実装する
 - [x] T012 [US1] `frontend/src/middleware.ts` で保護されたルート用の認証ミドルウェアを実装する
-- [x] T013 [US1] `backend/lambda/src/main.py` で認証APIエンドポイントを作成する
+- [x] T013 [US1] `backend/lambda/src/main.py` で認証 API エンドポイントを作成する
 - [x] T014 [US1] `backend/lambda/src/services/auth-service.py` でユーザー権限の検証ロジックを実装する
 
 ## フェーズ 4: 権限管理 [US3.5]
@@ -53,66 +53,66 @@ graph TD
 **目標**: システム内で管理者と一般ユーザーの権限を管理する。
 **独立テスト**: テーブルの権限値を手動で変更し、その権限に応じたアクセス制御が機能することを確認する。
 
-- [x] T015 [US3.5] `backend/lambda/src/models/user.py` でUserモデルとリポジトリを作成する
+- [x] T015 [US3.5] `backend/lambda/src/models/user.py` で User モデルとリポジトリを作成する
 - [x] T016 [US3.5] `frontend/src/lib/rbac.ts` でロールベースのアクセス制御 (RBAC) ユーティリティを実装する
 - [x] T017 [US3.5] `frontend/src/app/api/auth/[...nextauth]/route.ts` で認証セッションにユーザー権限を含めるよう更新する
 
-## フェーズ 5: ユーザーによるPC登録 [US2]
+## フェーズ 5: ユーザーによる PC 登録 [US2]
 
-**目標**: 一般ユーザーは自分のPCをシステムに登録し、スペック情報を簡単に入力できる。
-**独立テスト**: ユーザーがターミナルを起動した際にスペック取得コマンドが実行され、その結果がフォームに反映された後、Gemini APIによって整形されたデータが正しく登録され、適切な管理番号が付与されることを確認する。
+**目標**: 一般ユーザーは自分の PC をシステムに登録し、スペック情報を簡単に入力できる。
+**独立テスト**: ユーザーがターミナルを起動した際にスペック取得コマンドが実行され、その結果がフォームに反映された後、Gemini API によって整形されたデータが正しく登録され、適切な管理番号が付与されることを確認する。
 
-- [x] T018 [US2] `backend/ecs/src/models/pc.py` でPCモデルとリポジトリを実装する
-- [x] T019 [US2] `backend/ecs/src/services/gemini-service.py` でGemini API連携サービスを作成する
+- [x] T018 [US2] `backend/ecs/src/models/pc.py` で PC モデルとリポジトリを実装する
+- [x] T019 [US2] `backend/ecs/src/services/gemini-service.py` で Gemini API 連携サービスを作成する
 - [x] T020 [US2] `backend/ecs/src/main.py` でスペック解析エンドポイント `/api/pcs/parse-specs` を実装する
-- [x] T021 [US2] `backend/ecs/src/main.py` でPC登録エンドポイント `/api/pcs` を実装する
+- [x] T021 [US2] `backend/ecs/src/main.py` で PC 登録エンドポイント `/api/pcs` を実装する
 - [x] T022 [US2] `backend/ecs/src/services/pc-service.py` で自動採番ロジック (N-XXX, D-XXX) を実装する
-- [x] T023 [US2] `frontend/src/app/pcs/register/page.tsx` でPC登録フォームのUIを作成する
+- [x] T023 [US2] `frontend/src/app/pcs/register/page.tsx` で PC 登録フォームの UI を作成する
 - [x] T024 [US2] `frontend/src/components/terminal-command.tsx` でターミナルコマンドの生成とクリップボードへのコピー機能を実装する
-- [x] T025 [US2] `frontend/src/services/pc-api.ts` でフロントエンドのフォームとparse-specsおよび登録APIを統合する
+- [x] T025 [US2] `frontend/src/services/pc-api.ts` でフロントエンドのフォームと parse-specs および登録 API を統合する
 
-## フェーズ 6: 管理者によるPC代理登録 [US3]
+## フェーズ 6: 管理者による PC 代理登録 [US3]
 
-**目標**: 管理者は特定のユーザーを指定して、そのユーザーの代理としてPCを登録できる。
-**独立テスト**: 管理者がユーザーを選択し、PC情報を登録した結果が、選択したユーザーのPCとして正しく紐づき、管理番号が付与されることを確認する。
+**目標**: 管理者は特定のユーザーを指定して、そのユーザーの代理として PC を登録できる。
+**独立テスト**: 管理者がユーザーを選択し、PC 情報を登録した結果が、選択したユーザーの PC として正しく紐づき、管理番号が付与されることを確認する。
 
-- [ ] T026 [US3] `backend/ecs/src/main.py` で管理者ドロップダウン用のユーザー一覧エンドポイントを実装する
-- [ ] T027 [US3] `backend/ecs/src/main.py` で管理者がownerIdを指定できるようにPC登録エンドポイントを更新する
-- [ ] T028 [US3] `frontend/src/app/pcs/register/page.tsx` で管理者向けのPC登録フォームにユーザー選択ドロップダウンを追加する
+- [x] T026 [US3] `backend/ecs/src/main.py` で管理者ドロップダウン用のユーザー一覧エンドポイントを実装する
+- [x] T027 [US3] `backend/ecs/src/main.py` で管理者が ownerId を指定できるように PC 登録エンドポイントを更新する
+- [x] T028 [US3] `frontend/src/app/pcs/register/page.tsx` で管理者向けの PC 登録フォームにユーザー選択ドロップダウンを追加する
 
-## フェーズ 7: PCおよびユーザー一覧の確認 [US4]
+## フェーズ 7: PC およびユーザー一覧の確認 [US4]
 
-**目標**: 管理者はシステムに登録されているすべてのPC一覧とユーザー一覧を確認できる。
-**独立テスト**: 管理者権限でアクセスした際に、全PCと全ユーザーのリストが正しく表示されることを確認する。
+**目標**: 管理者はシステムに登録されているすべての PC 一覧とユーザー一覧を確認できる。
+**独立テスト**: 管理者権限でアクセスした際に、全 PC と全ユーザーのリストが正しく表示されることを確認する。
 
-- [ ] T029 [US4] `backend/ecs/src/main.py` でPC一覧エンドポイント `/api/pcs` を実装する
-- [ ] T030 [US4] `frontend/src/app/pcs/page.tsx` でPC一覧ページのUIを作成する
-- [ ] T031 [US4] `frontend/src/app/pcs/page.tsx` でCSVダウンロード機能を実装する
-- [ ] T032 [US4] `frontend/src/app/globals.css` でPC向けのレイアウトに対応したレスポンシブデザインを確保する
+- [x] T029 [US4] `backend/ecs/src/main.py` で PC 一覧エンドポイント `/api/pcs` を実装する
+- [x] T030 [US4] `frontend/src/app/pcs/page.tsx` で PC 一覧ページの UI を作成する
+- [x] T031 [US4] `frontend/src/app/pcs/page.tsx` で CSV ダウンロード機能を実装する
+- [x] T032 [US4] `frontend/src/app/globals.css` で PC 向けのレイアウトに対応したレスポンシブデザインを確保する
 
-## フェーズ 8: PC返却プロセス [US5]
+## フェーズ 8: PC 返却プロセス [US5]
 
-**目標**: ユーザーは不要になったPCを返却するためのフォームを送信できる。
-**独立テスト**: ユーザーが返却日、返却理由、PCの状態を入力して送信し、PCのステータスが更新されることを確認する。
+**目標**: ユーザーは不要になった PC を返却するためのフォームを送信できる。
+**独立テスト**: ユーザーが返却日、返却理由、PC の状態を入力して送信し、PC のステータスが更新されることを確認する。
 
-- [ ] T033 [US5] `backend/ecs/src/models/return-record.py` でReturnRecordモデルとリポジトリを実装する
-- [ ] T034 [US5] `backend/ecs/src/main.py` でPC返却エンドポイント `/api/pcs/{pcId}/return` を実装する
-- [ ] T035 [US5] `frontend/src/app/pcs/[pcId]/return/page.tsx` でPC返却フォームのUIを作成する
-- [ ] T036 [US5] `backend/ecs/src/services/pc-service.py` でPCのステータス遷移ロジックを更新する
+- [x] T033 [US5] `backend/ecs/src/models/return-record.py` で ReturnRecord モデルとリポジトリを実装する
+- [x] T034 [US5] `backend/ecs/src/main.py` で PC 返却エンドポイント `/api/pcs/{pcId}/return` を実装する
+- [x] T035 [US5] `frontend/src/app/pcs/[pcId]/return/page.tsx` で PC 返却フォームの UI を作成する
+- [x] T036 [US5] `backend/ecs/src/services/pc-service.py` で PC のステータス遷移ロジックを更新する
 
-## フェーズ 9: 未使用PC一覧の確認 [US6]
+## フェーズ 9: 未使用 PC 一覧の確認 [US6]
 
-**目標**: ユーザー（および管理者）は、現在誰にも割り当てられていない未使用のPC一覧を確認できる。
-**独立テスト**: 未使用PC一覧画面にアクセスし、ステータスが「未使用」のPCのみが表示されることを確認する。
+**目標**: ユーザー（および管理者）は、現在誰にも割り当てられていない未使用の PC 一覧を確認できる。
+**独立テスト**: 未使用 PC 一覧画面にアクセスし、ステータスが「未使用」の PC のみが表示されることを確認する。
 
-- [ ] T037 [US6] `backend/ecs/src/main.py` でステータスによるフィルタリングをサポートするようにPC一覧エンドポイントを更新する
-- [ ] T038 [US6] `frontend/src/app/pcs/unused/page.tsx` で未使用PC一覧のビュー/タブを作成する
+- [x] T037 [US6] `backend/ecs/src/main.py` でステータスによるフィルタリングをサポートするように PC 一覧エンドポイントを更新する
+- [x] T038 [US6] `frontend/src/app/pcs/unused/page.tsx` で未使用 PC 一覧のビュー/タブを作成する
 
-## 最終フェーズ: 仕上げ
+## 最終フェーズ：仕上げ
 
 **目標**: 横断的な関心事、最終テスト、デプロイの準備。
 
-- [ ] T039 `backend/lambda/src/services/ecs-manager.py` でLambda経由のECS自動スリープおよび起動ロジックを実装する
-- [ ] T040 `frontend/src/components/ecs-loading-state.tsx` でECSコールドスタート時にフロントエンドに「loading...」UIを追加する
-- [ ] T041 `scripts/migrate-excel-data.py` で既存のExcelデータ用のデータ移行スクリプトを作成する
+- [ ] T039 `backend/lambda/src/services/ecs-manager.py` で Lambda 経由の ECS 自動スリープおよび起動ロジックを実装する
+- [ ] T040 `frontend/src/components/ecs-loading-state.tsx` で ECS コールドスタート時にフロントエンドに「loading...」UI を追加する
+- [ ] T041 `scripts/migrate-excel-data.py` で既存の Excel データ用のデータ移行スクリプトを作成する
 - [ ] T042 最終的なエンドツーエンドテストとバグ修正
