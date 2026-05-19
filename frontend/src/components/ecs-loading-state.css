@@ -1,0 +1,177 @@
+/**
+ * ECS Loading State Component Styles
+ *
+ * ECS コールドスタート時のローディング UI スタイル
+ */
+
+/* ローディングオーバーレイのコンテナ */
+.ecs-loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, var(--backdrop-opacity, 0.7));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  opacity: 0;
+  transition: opacity 0.3s ease-in-out;
+  backdrop-filter: blur(2px);
+}
+
+.ecs-loading-overlay.visible {
+  opacity: 1;
+}
+
+/* ローディングコンテナ */
+.ecs-loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+  background: white;
+  border-radius: 12px;
+  padding: 3rem 2rem;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  max-width: 400px;
+  width: 90%;
+}
+
+/* スピナー */
+.ecs-spinner {
+  position: relative;
+  width: 50px;
+  height: 50px;
+}
+
+.ecs-spinner .spinner-circle {
+  position: absolute;
+  border: 4px solid #e0e0e0;
+  border-top-color: #1f2937;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.ecs-spinner .spinner-circle:nth-child(1) {
+  width: 50px;
+  height: 50px;
+  animation-delay: 0s;
+}
+
+.ecs-spinner .spinner-circle:nth-child(2) {
+  width: 35px;
+  height: 35px;
+  top: 7.5px;
+  left: 7.5px;
+  animation-delay: -0.33s;
+  animation-direction: reverse;
+}
+
+.ecs-spinner .spinner-circle:nth-child(3) {
+  width: 20px;
+  height: 20px;
+  top: 15px;
+  left: 15px;
+  animation-delay: -0.66s;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* ローディングメッセージ */
+.ecs-loading-message {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+  text-align: center;
+}
+
+/* サブメッセージ */
+.ecs-loading-submessage {
+  font-size: 0.875rem;
+  color: #6b7280;
+  text-align: center;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* プログレスバー */
+.ecs-progress-bar {
+  width: 100%;
+  height: 4px;
+  background-color: #e5e7eb;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.ecs-progress-bar .progress-fill {
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    #3b82f6,
+    #1f2937,
+    #3b82f6
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+  border-radius: 2px;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* モバイル対応 */
+@media (max-width: 640px) {
+  .ecs-loading-container {
+    padding: 2rem 1.5rem;
+    gap: 1.5rem;
+  }
+
+  .ecs-loading-message {
+    font-size: 1.125rem;
+  }
+
+  .ecs-loading-submessage {
+    font-size: 0.8125rem;
+  }
+}
+
+/* ダークモード対応（将来用） */
+@media (prefers-color-scheme: dark) {
+  .ecs-loading-container {
+    background: #1f2937;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+  }
+
+  .ecs-loading-message {
+    color: #f3f4f6;
+  }
+
+  .ecs-loading-submessage {
+    color: #9ca3af;
+  }
+
+  .ecs-progress-bar {
+    background-color: #374151;
+  }
+
+  .ecs-spinner .spinner-circle {
+    border-top-color: #60a5fa;
+  }
+}

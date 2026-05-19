@@ -112,7 +112,7 @@ graph TD
 
 **目標**: 横断的な関心事、最終テスト、デプロイの準備。
 
-- [ ] T039 `backend/lambda/src/services/ecs-manager.py` で Lambda 経由の ECS 自動スリープおよび起動ロジックを実装する
-- [ ] T040 `frontend/src/components/ecs-loading-state.tsx` で ECS コールドスタート時にフロントエンドに「loading...」UI を追加する
-- [ ] T041 `scripts/migrate-excel-data.py` で既存の Excel データ用のデータ移行スクリプトを作成する
-- [ ] T042 最終的なエンドツーエンドテストとバグ修正
+- [x] T039 `backend/lambda/src/services/ecs-manager.py` で Lambda 経由の ECS 自動スリープおよび起動ロジックを実装する
+- [x] T040 `frontend/src/components/ecs-loading-state.tsx` で ECS コールドスタート時にフロントエンドに「loading...」UI を追加する
+- [x] T041 `scripts/migrate-excel-data.py` で既存の Excel データ用のデータ移行スクリプトを作成する
+- [x] T042 最終的なエンドツーエンドテストとバグ修正

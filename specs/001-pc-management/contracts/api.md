@@ -105,3 +105,22 @@
     "status": "success"
   }
   ```
+### PATCH `/api/pcs/{pcId}/status`
+- **Description**: PC のステータスを更新する。管理者のみ実行可能。
+- **Permissions**: Admin role required
+- **Request**:
+  ```json
+  {
+    "newStatus": "InUse | Unused | PendingDisposal | Disposed"
+  }
+  ```
+- **Response**:
+  ```json
+  {
+    "status": "success",
+    "pcId": "string",
+    "previousStatus": "string",
+    "newStatus": "string",
+    "updatedAt": "ISO 8601 timestamp"
+  }
+  ```
