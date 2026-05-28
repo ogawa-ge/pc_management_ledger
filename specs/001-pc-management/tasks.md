@@ -113,6 +113,22 @@ graph TD
 **目標**: 横断的な関心事、最終テスト、デプロイの準備。
 
 - [x] T039 `backend/lambda/src/services/ecs-manager.py` で Lambda 経由の ECS 自動スリープおよび起動ロジックを実装する
+  - [ ] T039-1 ECS タスク起動関数 `start_ecs_task()` の実装
+  - [ ] T039-2 ECS タスク停止関数 `stop_ecs_task()` の実装
+  - [ ] T039-3 アイドルタイムアウト判定関数 `check_idle_timeout()` の実装（2 時間ルール）
+  - [ ] T039-4 CloudWatch Events トリガー対応（1 時間ごとのチェック）
+  - [ ] T039-5 関連 DynamoDB フィールド `lastActivityAt` の記録・更新ロジック
+  - [ ] T039-6 CloudWatch Logs への監査ログ出力
 - [x] T040 `frontend/src/components/ecs-loading-state.tsx` で ECS コールドスタート時にフロントエンドに「loading...」UI を追加する
 - [x] T041 `scripts/migrate-excel-data.py` で既存の Excel データ用のデータ移行スクリプトを作成する
 - [x] T042 最終的なエンドツーエンドテストとバグ修正
+  - [ ] T042-1 Gemini 精度テストスイート実装
+    - [ ] T042-1-1 標準フォーマットのターミナル出力テストケース 50+ 件の作成
+    - [ ] T042-1-2 エッジケース（手書きログ、非標準フォーマット等）テストケース 50+ 件の作成
+    - [ ] T042-1-3 精度計算スクリプト（6 項目中 5 項目正確性判定）の実装（`backend/ecs/tests/test-gemini-accuracy.py`）
+  - [ ] T042-2 Excel 移行検証
+    - [ ] T042-2-1 D-001～D-007、N-001～N-034 の欠損なし確認
+    - [ ] T042-2-2 採番の正確性（D-008 以降、N-035 以降から自動採番開始）の確認
+    - [ ] T042-2-3 ステータス初期値の妥当性（「利用中」または「未使用」）の確認
+  - [ ] T042-3 ECS 自動スリープ検証（2 時間タイムアウト、CloudWatch Events トリガーの動作確認）
+  - [ ] T042-4 完全なエンドツーエンドフロー検証（Microsoft SSO → PC 登録 → Gemini 抽出 → 一覧表示 → PC 返却）

@@ -2,8 +2,10 @@ from typing import Dict, Any
 from backend.ecs.src.models.pc import Pc, PcRepository
 from backend.ecs.src.services.gemini_service import parse_specs
 from backend.ecs.src.models.return_record import ReturnRecord, ReturnRecordRepository
+from backend.ecs.src.models.usage_history import UsageHistory, UsageHistoryRepository
 from datetime import datetime
 import re
+import uuid
 from fastapi import HTTPException
 
 def generate_pc_id(owner_id: str, pc_type: str) -> str:
@@ -101,3 +103,49 @@ async def process_pc_return(pc_id: str, user_id: str, return_reason: str, pc_sta
     # await pc_repo.update_pc_status(pc_id, "Returned")
     
     return {"message": f"PC ID {pc_id} の返却処理が正常に完了しました。記録ID: {record_id}"}
+
+
+async def record_usage_history(
+    pc_id: str,
+    action: str,
+    user_id: Optional[str] = None,
+    old_status: Optional[str] = None,
+    new_status: Optional[str] = None,
+    reason: Optional[str] = None,
+    condition: Optional[str] = None
+) -> UsageHistory:
+    """
+    PC 利用履歴を記録する
+    
+    Args:
+        pc_id: PC ID
+        action: 'registered', 'returned', 'status_updated', 'disposed'
+        user_id: ユーザー ID（オプション）
+        old_status: 前のステータス（オプション）
+        new_status: 新しいステータス（オプション）
+        reason: 理由（オプション）
+        condition: PC の状態（オプション）
+    
+    Returns:
+        UsageHistory: 作成された利用履歴レコード
+    """
+    history_id = str(uuid.uuid4())
+    
+    history_record = UsageHistory(
+        id=history_id,
+        pc_id=pc_id,
+        action=action,
+        old_status=old_status,
+        new_status=new_status,
+        user_id=user_id,
+        reason=reason,
+        condition=condition,
+        created_at=datetime.utcnow().isoformat()
+    )
+    
+    try:
+        repo = UsageHistoryRepository()
+        return await repo.create_record(history_record)
+    except Exception as e:
+        print(f"Error recording usage history: {e}")
+        raise

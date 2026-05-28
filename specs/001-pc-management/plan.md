@@ -21,6 +21,25 @@
 **Constraints**: 月間数百円〜数千円以内のコスト、ALB非利用（Lambda Function URLsやECS直接接続を活用）
 **Scale/Scope**: 20〜30名のユーザー、PC台数約40台（初期）
 
+## ECS Auto-Sleep Implementation Details
+
+**背景**: FR-015 で「ECS は利用時にのみ起動し、2 時間のアイドル状態が継続した場合に自動でスリープ状態に移行」と定義されている。以下が実装の責任分担と技術詳細。
+
+### タイムスタンプ管理
+- **記録場所**: DynamoDB `PCs` テーブルに `lastActivityAt` フィールドを追加（ISO 8601 形式）
+- **更新トリガー**: Lambda 経由のすべての ECS API 呼び出し完了時に、該当ユーザーまたはシステムの `lastActivityAt` をリアルタイムで更新
+- **判定ロジック**: Lambda 内の `ecs-manager.py` で、ECS ヘルスチェック API の呼び出し時に「現在時刻 - lastActivityAt > 2 時間」を条件に停止指令を実行
+
+### CloudWatch Events との連携
+- **定期判定**: CloudWatch Events で 1 時間ごとに Lambda 関数を実行（`ecs-manager.py` 内の `check_idle_timeout` 関数）
+- **停止処理**: Lambda が ECS タスク定義を参照し、タイムアウト条件にマッチしたタスクを停止（ECS `stop_task` API）
+- **ログ記録**: ECS 停止イベントを CloudWatch Logs に記録し、トラブルシューティング時に参照可能にする
+
+### 起動処理
+- **トリガー**: フロントエンドから PC 管理関連の重い API リクエスト（parse-specs、PC 登録、一覧取得等）を受信時
+- **実装**: Lambda が ECS タスク定義を起動（ECS `run_task` API）し、ローディング UI をフロントエンドに返す（FR-016）
+- **責任**: T039（ecs-manager.py）が起動・停止ロジックの全責任を担う；T040（ecs-loading-state.tsx）はフロントエンドのローディング表示を担当
+
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*

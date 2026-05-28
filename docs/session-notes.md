@@ -10,6 +10,114 @@
 
 ## テンプレート
 
+### 日付：2026-05-21
+
+#### 概要
+- 作業内容:
+  - 前回セッション(2026-05-19)で記録された 3 つの残作業を実装完了
+- 決定事項:
+  - **実装状況**: 全 3 タスク完了 ✅
+    1. **D-001 (CRITICAL)**: ✅ PATCH /api/pcs/{pcId}/status エンドポイント実装完了
+    2. **U-001 (HIGH)**: ✅ PC Usage History ロジック実装完了
+    3. **U-002 (HIGH)**: ✅ 初期管理者設定スクリプト作成完了
+
+#### 実装詳細
+
+##### 1. D-001: PC ステータス更新エンドポイント実装 ✅ COMPLETED
+**ファイル**: backend/ecs/src/main.py
+
+実装内容:
+- `@app.patch("/api/pcs/{pc_id}/status")` エンドポイント追加
+- 認可チェック（Authorization ヘッダー確認）
+- ステータス値の検証（InUse, Unused, PendingDisposal, Disposed）
+- DynamoDB への更新処理（status フィールド、updated_at タイムスタンプ）
+- 利用履歴への自動記録（record_usage_history 関数呼び出し）
+- エラーハンドリングと適切な HTTP ステータスコード返却
+
+機能:
+- 前のステータスと新しいステータスをレスポンスに含める
+- 理由（reason）フィールド追加可能
+- 同じステータスへの変更は無視
+- 内部エラーでも履歴記録失敗時は成功レスポンス
+
+##### 2. U-001: PC Usage History ロジック実装 ✅ COMPLETED
+**ファイル**: 
+- backend/ecs/src/models/usage_history.py (新規作成)
+- backend/ecs/src/services/pc-service.py (関数追加)
+
+実装内容:
+
+A. **UsageHistory モデル** (usage_history.py):
+- UsageHistory クラス: id, pc_id, action, old_status, new_status, user_id, reason, condition, created_at
+- UsageHistoryRepository クラス: CRUD メソッド実装
+  - create_record(): 履歴レコード作成
+  - get_by_pc_id(): PC ID で検索
+  - get_by_user_id(): User ID で検索
+  - get_all(): 全履歴取得
+
+B. **record_usage_history() 関数** (pc-service.py):
+- PC ステータス変更時に呼び出し可能な非同期関数
+- UUID 自動生成
+- タイムスタンプ自動設定
+- 例外ハンドリング
+
+##### 3. U-002: 初期管理者設定スクリプト作成 ✅ COMPLETED
+**ファイル**: scripts/seed-initial-admin.py (新規作成)
+
+実装内容:
+- 初期管理者ユーザーを DynamoDB Users テーブルに作成
+- コマンドラインオプション:
+  - `--name`: 管理者名（デフォルト: System Administrator）
+  - `--email`: メールアドレス（デフォルト: admin@pcmanagement.local）
+  - `--user-id`: カスタムユーザー ID（オプション、自動生成可）
+  - `--force`: 既存 Admin を上書きするフラグ
+
+機能:
+- Admin ユーザー既存チェック（重複作成防止）
+- 権限の自動割り当て（pc:create, pc:read, pc:update, pc:delete, pc:change_status 等）
+- AWS 認証情報の検証
+- 詳細なログ出力（ユーザー情報確認）
+- エラーハンドリングと終了コード
+
+#### 技術詳細
+
+**RBAC 機能** (main.py):
+- `get_user_role(user_id)` 関数: DynamoDB から role 取得
+- `require_admin` デコレーター: Admin 権限確認（将来の拡張用）
+
+**DB スキーマ**:
+- Users テーブル: userId (PK), name, email, role, createdAt, status, permissions
+- PC_Usage_History テーブル: id (PK), pc_id (SK), action, old_status, new_status, user_id, reason, condition, created_at
+
+#### 検証項目
+- [ ] E2E テスト実装（test_e2e.py に PATCH エンドポイントテスト追加）
+- [ ] DynamoDB テーブル設定確認（PC_Usage_History テーブル作成）
+- [ ] seed-initial-admin.py の実行確認
+- [ ] 統合テスト実行
+
+#### 次のステップ
+1. **テスト実装**: backend/tests/ に以下のテストケース追加
+   - test_patch_pc_status_success: ステータス更新成功
+   - test_patch_pc_status_unauthorized: 認可失敗
+   - test_patch_pc_status_invalid_status: 無効なステータス
+   - test_usage_history_recorded: 履歴記録確認
+
+2. **デプロイ前確認**:
+   - DynamoDB テーブルが AWS 環境で作成されているか確認
+   - IAM ロール/ポリシーの確認（ECS タスクロールが DynamoDB アクセス可能か）
+   - env 設定ファイルの確認
+
+3. **ドキュメント更新**:
+   - API コントラクト (contracts/api.md) に PATCH エンドポイント記載確認
+   - デプロイメント手順書に seed-initial-admin.py の実行を追加
+
+#### 修正日
+- **開始**: 2026-05-21
+- **完了**: 2026-05-21
+- **実装時間**: 約 2-3 時間
+
+---
+
 ### 日付：2026-05-19
 
 #### 概要
