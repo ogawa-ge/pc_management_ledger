@@ -1,12 +1,17 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import TerminalCommand from '@/components/terminal-command';
 import { useRouter } from 'next/navigation';
+import { getUsers, parseSpecs, registerPC } from '@/services/pc-api';
 
 const PCRegisterPage = () => {
   const [pcName, setPcName] = useState('');
   const [os, setOs] = useState('');
+  const [cpu, setCpu] = useState('');
+  const [memory, setMemory] = useState('');
+  const [storage, setStorage] = useState('');
+  const [gpu, setGpu] = useState('');
   const [ownerId, setOwnerId] = useState('');
   const [users, setUsers] = useState<any[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);

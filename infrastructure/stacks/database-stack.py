@@ -49,5 +49,8 @@ class DatabaseStack(Stack):
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST
         )
 
-        # テーブルARNを出力
-        # これにより、lambda-stack.pyで使用できるようになります
+        # テーブルを属性として保持（他スタックからの参照用）
+        self.users_table = users_table
+        self.pcs_table = pcs_table
+        self.return_records_table = return_records_table
+        self.pc_usage_histories_table = pc_usage_histories_table

@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState, useEffect } from 'react';
 import { PC } from '@/types/pc';
 import Link from 'next/link';

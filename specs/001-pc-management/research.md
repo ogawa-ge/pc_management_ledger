@@ -22,7 +22,7 @@
 ## 3. Microsoftアカウントでのログイン (SSO)
 
 **Decision**: Next.jsのフロントエンドで `next-auth` (Auth.js) を利用し、Azure AD (Microsoft Entra ID) プロバイダーを設定してログインを実装する。取得したトークン（またはユーザー情報）をLambdaに送信し、DynamoDBの権限テーブルと照合してアクセス制御を行う。
-認証は特定のテナント（`fujiigenuineptjp.onmicrosoft.com`、テナントID: `a7865f90-1ba3-4859-81a1-46a3fcb2d44d`）のみを許可するように設定し、クライアントIDとして `8971c9e1-2854-4f2b-955d-c8b54e3416c0` を使用する。
+認証は特定のテナント（`***AZURE_AD_TENANT_NAME_MASKED***`、テナントID: `***AZURE_AD_TENANT_ID_MASKED***`）のみを許可するように設定し、クライアントIDとして `***AZURE_AD_CLIENT_ID_MASKED***` を使用する。
 
 **Rationale**: Next.jsエコシステムで標準的かつ実績のある `next-auth` を利用することで、セキュアかつ容易にMicrosoftアカウント連携を実装できるため。
 

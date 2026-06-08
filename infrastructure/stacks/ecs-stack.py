@@ -4,12 +4,14 @@ from aws_cdk import (
     aws_ec2 as ec2,
     aws_iam as iam,
     aws_elasticloadbalancingv2 as elbv2,
+    aws_secretsmanager as secretsmanager,
     Duration,
 )
 from constructs import Construct
 
 class EcsStack(Stack):
-    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, 
+                 pcs_table=None, pc_usage_histories_table=None, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
         # VPCの作成
@@ -18,6 +20,12 @@ class EcsStack(Stack):
             cidr="10.0.0.0/16",
             max_azs=2,
             nat_gateways=1,
+        )
+
+        # Gemini API キーのシークレット参照
+        # 事前に AWS Secrets Manager に 'GeminiApiKey' という名前で登録されている想定
+        gemini_secret = secretsmanager.Secret.from_secret_name_v2(
+            self, "GeminiApiKeySecret", "GeminiApiKey"
         )
 
         # ECSクラスターの作成
@@ -32,6 +40,24 @@ class EcsStack(Stack):
             self, "PCManagementTaskDefinition",
             memory_limit_mib=512,
             cpu=256,
+        )
+
+        # コンテナ定義の追加
+        container = task_definition.add_container(
+            "PCManagementContainer",
+            image=ecs.ContainerImage.from_asset("backend/ecs"),
+            logging=ecs.LogDrivers.aws_logs(stream_prefix="PCManagement"),
+            environment={
+                "PCS_TABLE_NAME": pcs_table.table_name if pcs_table else "PCs",
+                "USAGE_HISTORY_TABLE_NAME": pc_usage_histories_table.table_name if pc_usage_histories_table else "PCUsageHistories",
+            },
+            secrets={
+                "GEMINI_API_KEY": ecs.Secret.from_secrets_manager(gemini_secret)
+            }
+        )
+
+        container.add_port_mappings(
+            ecs.PortMapping(container_port=80, host_port=80)
         )
 
         # ECSサービスの作成
@@ -50,24 +76,7 @@ class EcsStack(Stack):
         )
 
         # DynamoDBへのアクセス権限を追加
-        ecs_role.add_to_policy(
-            iam.PolicyStatement(
-                effect=iam.Effect.ALLOW,
-                actions=[
-                    "dynamodb:GetItem",
-                    "dynamodb:PutItem",
-                    "dynamodb:UpdateItem",
-                    "dynamodb:DeleteItem",
-                    "dynamodb:Query",
-                    "dynamodb:Scan",
-                ],
-                resources=[
-                    # DynamoDBテーブルのARNを指定
-                    # 例: "arn:aws:dynamodb:region:account:table/TableName"
-                ]
-            )
-        )
-
-        # タスク定義にロールを追加
-        task_definition.add_execution_role(ecs_role)
-        task_definition.add_task_role(ecs_role)
+        if pcs_table:
+            pcs_table.grant_read_write_data(task_definition.task_role)
+        if pc_usage_histories_table:
+            pc_usage_histories_table.grant_read_write_data(task_definition.task_role)

@@ -17,7 +17,7 @@ interface ReturnFormData {
 export default function ReturnPage() {
   const params = useParams();
   // URLパラメータからPC IDを取得
-  const pcId = params.pcId as string;
+  const pcId = params?.pcId as string;
 
   const [formData, setFormData] = useState<ReturnFormData>({
     returnReason: '',
@@ -26,7 +26,7 @@ export default function ReturnPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };

@@ -6,29 +6,28 @@ import aws_cdk as cdk
 from infrastructure.infrastructure_stack import InfrastructureStack
 from infrastructure.stacks.database_stack import DatabaseStack
 from infrastructure.stacks.lambda_stack import LambdaStack
+from infrastructure.stacks.ecs_stack import EcsStack
 
 
 app = cdk.App()
-InfrastructureStack(app, "InfrastructureStack",
-    # If you don't specify 'env', this stack will be environment-agnostic.
-    # Account/Region-dependent features and context lookups will not work,
-    # but a single synthesized template can be deployed anywhere.
 
-    # Uncomment the next line to specialize this stack for the AWS Account
-    # and Region that are implied by the current CLI configuration.
+# 1. データベーススタック
+database_stack = DatabaseStack(app, "DatabaseStack")
 
-    #env=cdk.Environment(account=os.getenv('CDK_DEFAULT_ACCOUNT'), region=os.getenv('CDK_DEFAULT_REGION')),
+# 2. Lambdaスタック (認証・管理用)
+lambda_stack = LambdaStack(
+    app, "LambdaStack",
+    users_table=database_stack.users_table,
+    pcs_table=database_stack.pcs_table,
+    return_records_table=database_stack.return_records_table,
+    pc_usage_histories_table=database_stack.pc_usage_histories_table
+)
 
-    # Uncomment the next line if you know exactly what Account and Region you
-    # want to deploy the stack to. */
-
-    #env=cdk.Environment(account='123456789012', region='us-east-1'),
-
-    # For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html
-    )
-
-# 新しいスタックを追加
-DatabaseStack(app, "DatabaseStack")
-LambdaStack(app, "LambdaStack")
+# 3. ECSスタック (スペック抽出・バッチ用)
+ecs_stack = EcsStack(
+    app, "EcsStack",
+    pcs_table=database_stack.pcs_table,
+    pc_usage_histories_table=database_stack.pc_usage_histories_table
+)
 
 app.synth()
