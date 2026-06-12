@@ -1,3 +1,4 @@
+import os
 from aws_cdk import (
     Stack,
     aws_ecs as ecs,
@@ -43,9 +44,13 @@ class EcsStack(Stack):
         )
 
         # コンテナ定義の追加
+        # プロジェクトルートからのパスを解決
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        ecs_src_dir = os.path.join(base_dir, "backend", "ecs")
+
         container = task_definition.add_container(
             "PCManagementContainer",
-            image=ecs.ContainerImage.from_asset("backend/ecs"),
+            image=ecs.ContainerImage.from_asset(ecs_src_dir),
             logging=ecs.LogDrivers.aws_logs(stream_prefix="PCManagement"),
             environment={
                 "PCS_TABLE_NAME": pcs_table.table_name if pcs_table else "PCs",

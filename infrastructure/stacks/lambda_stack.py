@@ -1,3 +1,4 @@
+import os
 from aws_cdk import (
     Stack,
     aws_lambda as _lambda,
@@ -21,19 +22,25 @@ class LambdaStack(Stack):
         )
 
         # Lambda関数を作成
+        # プロジェクトルートからのパスを解決
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        lambda_src_dir = os.path.join(base_dir, "backend", "lambda", "src")
+
         api_lambda = _lambda.Function(
             self, "ApiLambda",
             runtime=_lambda.Runtime.PYTHON_3_9,
             handler="main.lambda_handler",
-            code=_lambda.Code.from_asset("backend/lambda/src"),
+            code=_lambda.Code.from_asset(lambda_src_dir),
             timeout=Duration.seconds(30),
             environment={
                 "USERS_TABLE_NAME": users_table.table_name if users_table else "Users",
                 "PCS_TABLE_NAME": pcs_table.table_name if pcs_table else "PCs",
-                "AZURE_AD_CLIENT_ID": azure_ad_secrets.secret_value_from_json("clientId").to_string(),
-                "AZURE_AD_TENANT_ID": azure_ad_secrets.secret_value_from_json("tenantId").to_string(),
+                "AZURE_AD_SECRET_NAME": "AzureAdSecrets",
             }
         )
+
+        # シークレットへの読み取り権限を追加
+        azure_ad_secrets.grant_read(api_lambda)
 
         # DynamoDBへのアクセス権限を追加
         if users_table:
