@@ -52,7 +52,7 @@ class EcsStack(Stack):
                 "USAGE_HISTORY_TABLE_NAME": pc_usage_histories_table.table_name if pc_usage_histories_table else "PCUsageHistories",
             },
             secrets={
-                "GEMINI_API_KEY": ecs.Secret.from_secrets_manager(gemini_secret)
+                "GEMINI_API_KEY": ecs.Secret.from_secrets_manager(gemini_secret, "GeminiApiKey")
             }
         )
 

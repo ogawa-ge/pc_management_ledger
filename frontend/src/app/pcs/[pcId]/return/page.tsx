@@ -49,9 +49,9 @@ export default function ReturnPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          user_id: 'CURRENT_USER_ID', // 実際には認証情報から取得する
-          return_reason: formData.returnReason,
-          pc_status_at_return: formData.pcStatusAtReturn,
+          userId: 'CURRENT_USER_ID', // 実際には認証情報から取得する
+          returnReason: formData.returnReason,
+          pcStatusAtReturn: formData.pcStatusAtReturn,
         }),
       });
 

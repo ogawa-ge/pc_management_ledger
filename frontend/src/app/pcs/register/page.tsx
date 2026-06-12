@@ -25,7 +25,7 @@ const PCRegisterPage = () => {
         setUsers(userList);
         // デフォルトで最初のユーザーをオーナーとして設定
         if (userList.length > 0) {
-          setOwnerId(userList[0].id);
+          setOwnerId(userList[0].userId);
         }
       } catch (error) {
         console.error('ユーザーリストの取得に失敗しました:', error);

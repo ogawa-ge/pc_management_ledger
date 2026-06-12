@@ -1,7 +1,8 @@
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import Field
 from pydantic_settings import BaseSettings
+from backend.ecs.src.models.base import BaseApiModel
 
 # 環境変数から設定を読み込むための設定クラス（必要に応じて）
 class Settings(BaseSettings):
@@ -9,7 +10,7 @@ class Settings(BaseSettings):
     pass
 
 # ReturnRecordモデルの定義
-class ReturnRecord(BaseModel):
+class ReturnRecord(BaseApiModel):
     """
     PCの返却記録を保持するモデル。
     """

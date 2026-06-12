@@ -429,3 +429,45 @@ ecord_usage_history() 関数実装
 - **開始**: 2026-06-02
 - **完了**: 2026-06-02
 - **実装時間**: 約 2 時間
+
+### 日付：2026-06-08
+
+#### 概要
+- 作業内容:
+  - Git コミットとプッシュ（機密情報検知による履歴書き換え対応を含む）
+  - 命名規則の統一（Backend: snake_case ↔ Frontend: camelCase の自動変換）
+  - AWS Secrets Manager への本番シークレット登録
+  - ローカル E2E テストの準備と依存ライブラリのインストール
+
+#### 作業内容詳細
+
+##### 1. Git 履歴のクリーンアップとプッシュ ✅ COMPLETED
+- **課題**: 過去のコミットに機密情報（APIキー等）が含まれていたため、GitHub の Push Protection によりブロックされた。
+- **対応**: `git reset --soft` で履歴を巻き戻し、機密情報を完全に排除した状態で 1 つのクリーンなコミットにまとめてプッシュを完了。
+
+##### 2. 命名規則の統一 (T043) ✅ COMPLETED
+- **Backend**:
+  - `backend/ecs/src/models/base.py` を作成し、`BaseApiModel` を定義。
+  - Pydantic v2 の `alias_generator=to_camel` と `populate_by_name=True` を設定。
+  - 内部ロジックは `snake_case` を維持しつつ、API インフェースを `camelCase` に統一。
+  - インポート規則に合わせ、ファイル名を snake_case に変更（例: `gemini_service.py`, `pc_service.py`）。
+- **Frontend**:
+  - `frontend/src/types/pc.ts` の冗長な型定義を削除。
+  - API 呼び出しを `camelCase` で送信するように修正。
+
+##### 3. インフラと本番シークレット設定 ✅ COMPLETED
+- **Secrets Manager**: `AzureAdSecrets` と `GeminiApiKey` を AWS コンソールから登録。
+- **CDK 修正**: `infrastructure/stacks/ecs-stack.py` でシークレットの特定のキー（`GeminiApiKey`）を明示的に取得するように修正。
+
+##### 4. ローカルテスト環境の整備 ✅ COMPLETED
+- **依存ライブラリ追加**: `boto3`, `httpx`, `pydantic-settings` をインストール。
+- **自動テスト検証**: `tests/test_naming_convention.py` により、Pydantic モデルの変換ロジックが正常であることを確認。
+
+#### 技術的発見と課題
+- **NextAuth ログインエラー**: `AADSTS90112: Application identifier is expected to be a GUID` が発生。
+- **原因**: `.env.local` に `AZURE_AD_CLIENT_SECRET` が不足しているため、Azure AD 認証プロセスが正常に完了していない可能性が高い。
+
+#### 次のステップ
+1. **.env.local の修正**: `AZURE_AD_CLIENT_SECRET` を追加する。
+2. **E2E テストの再開**: ログイン後の PC 登録・一覧表示の流れを確認。
+3. **CDK デプロイの検討**: ローカルテスト完了後、AWS 環境への反映。

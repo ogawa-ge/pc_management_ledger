@@ -9,7 +9,7 @@ export const parseSpecs = async (specsText: string) => {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ specs_text: specsText }),
+      body: JSON.stringify({ specsText }),
     });
 
     if (!response.ok) {
@@ -32,7 +32,7 @@ export const registerPC = async (ownerId: string, specsText: string, pcType: str
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ owner_id: ownerId, specs_text: specsText, pc_type: pcType }),
+      body: JSON.stringify({ ownerId, specsText, pcType }),
     });
 
     if (!response.ok) {

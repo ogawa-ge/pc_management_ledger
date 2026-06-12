@@ -1,10 +1,10 @@
 from typing import Optional, List
 from datetime import datetime
-from pydantic import BaseModel
 from backend.ecs.src.db import dynamodb
+from backend.ecs.src.models.base import BaseApiModel
 
 
-class UsageHistory(BaseModel):
+class UsageHistory(BaseApiModel):
     """PC 利用履歴モデル"""
     id: str
     pc_id: str

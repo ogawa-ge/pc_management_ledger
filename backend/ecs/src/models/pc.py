@@ -1,10 +1,10 @@
 from typing import Optional, List
 from datetime import datetime
-from pydantic import BaseModel
 from backend.ecs.src.db import get_db
+from backend.ecs.src.models.base import BaseApiModel
 
 
-class Pc(BaseModel):
+class Pc(BaseApiModel):
     pc_id: str
     owner_id: str
     type: str
@@ -18,6 +18,22 @@ class Pc(BaseModel):
     serial_number: Optional[str] = None
     created_at: str
     updated_at: str
+
+
+class PcCreateRequest(BaseApiModel):
+    owner_id: Optional[str] = None
+    specs_text: Optional[str] = None
+    pc_type: str = "N"
+
+
+class PcParseRequest(BaseApiModel):
+    specs_text: str
+
+
+class PcReturnRequest(BaseApiModel):
+    user_id: str
+    return_reason: str
+    pc_status_at_return: str
 
 
 class PcRepository:
