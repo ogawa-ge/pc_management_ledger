@@ -4,9 +4,9 @@ import os
 import aws_cdk as cdk
 
 from infrastructure.infrastructure_stack import InfrastructureStack
-from infrastructure.stacks.database_stack import DatabaseStack
-from infrastructure.stacks.lambda_stack import LambdaStack
-from infrastructure.stacks.ecs_stack import EcsStack
+from stacks.database_stack import DatabaseStack
+from stacks.lambda_stack import LambdaStack
+from stacks.ecs_stack import EcsStack
 
 
 app = cdk.App()

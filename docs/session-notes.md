@@ -471,3 +471,47 @@ ecord_usage_history() 関数実装
 1. **.env.local の修正**: `AZURE_AD_CLIENT_SECRET` を追加する。
 2. **E2E テストの再開**: ログイン後の PC 登録・一覧表示の流れを確認。
 3. **CDK デプロイの検討**: ローカルテスト完了後、AWS 環境への反映。
+
+---
+
+### 日付：2026-06-12
+
+#### 概要
+- 作業内容:
+  - Azure AD 認証シークレットの設定とログイン機能の正常化
+  - フロントエンドのルートレイアウトおよび Providers の実装
+  - ログアウト機能の実装
+  - AWS CDK によるデプロイ準備とエラー解消 (Dockerfile作成, パス修正, セキュリティ対応)
+
+#### 作業内容詳細
+
+##### 1. 認証機能の修正 ✅ COMPLETED
+- **環境設定**: `frontend/.env.local` を作成し、画像から取得した `AZURE_AD_CLIENT_SECRET` および `NEXTAUTH_SECRET` 等を設定。
+- **レイアウト修正**: `src/app/layout.tsx` を作成し、`<html>` `<body>` タグの欠如による Runtime Error を解消。
+- **Provider 実装**: `src/components/providers.tsx` を作成し `SessionProvider` を適用。
+- **ログインフロー**: `middleware.ts` を修正し、ログイン済みユーザーを `/pcs` へ自動リダイレクトするように変更。
+- **ログアウト**: `src/app/pcs/page.tsx` に `signOut` ボタンを実装。
+
+##### 2. バックエンド環境変数の読み込み修正 ✅ COMPLETED
+- **ファイル**: `backend/ecs/src/main.py`
+- **内容**: `python-dotenv` を使用してプロジェクトルートの `.env.local` から環境変数を読み込むように修正。
+
+##### 3. インフラデプロイの準備 (CDK) ✅ IN-PROGRESS
+- **ファイル名統一**: スタックファイルを Python 命名規則 (`snake_case`) に変更し、`__init__.py` を作成。
+- **パス解決**: `lambda_stack.py` および `ecs_stack.py` 内で、カレントディレクトリに依存しない絶対パスによるアセット指定 (`os.path.abspath`) に修正。
+- **Docker対応**: `backend/ecs/Dockerfile` を作成し、ECS コンテナのビルドを可能に。
+- **セキュリティ修正**: `SecretValueExposureRisk` を回避するため、シークレットの値を環境変数に直接入れる方式から、実行時に参照する方式へ変更。
+
+#### 技術的発見と課題
+- **CDK デプロイ停止中**: AWS アカウント/リージョンの解決エラー (`Unable to resolve AWS account`) が発生。
+- **原因**: ターミナル環境で AWS CLI の認証情報またはデフォルトリージョンが設定されていない可能性。
+
+#### 次のステップ
+1. **AWS 認証設定**: `aws configure` または環境変数でデプロイ先アカウントとリージョンを指定。
+2. **CDK デプロイ**: `cdk bootstrap` および `cdk deploy --all` を実行。
+3. **Azure Portal 更新**: デプロイ後の本番ドメインを Azure AD のリダイレクト URI に登録。
+
+#### 修正日
+- **開始**: 2026-06-12
+- **完了**: 2026-06-12
+- **実装時間**: 約 1.5 時間

@@ -11,6 +11,13 @@ export default async function middleware(request: any) {
     url.pathname = '/login';
     return NextResponse.redirect(url);
   }
+
+  // 認証済みでログインページにアクセスした場合、トップ（PC一覧）にリダイレクト
+  if (token && request.nextUrl.pathname === '/login') {
+    const url = request.nextUrl.clone();
+    url.pathname = '/pcs';
+    return NextResponse.redirect(url);
+  }
   
   // 認証されている場合、通常の処理を継続
   return NextResponse.next();

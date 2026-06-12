@@ -9,6 +9,11 @@ from backend.ecs.src.models.return_record import ReturnRecordRepository
 from backend.ecs.src.models.pc import PcRepository, Pc, PcCreateRequest, PcParseRequest, PcReturnRequest
 from backend.ecs.src.models.user import User
 from backend.ecs.src.db import dynamodb
+from dotenv import load_dotenv
+import os
+
+# .env.local を読み込む
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "../../../.env.local"))
 
 app = FastAPI()
 

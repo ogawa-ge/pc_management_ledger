@@ -9,8 +9,12 @@
  */
 export async function get_user_permissions(userId: string): Promise<string[]> {
   try {
+    // サーバーサイドでの実行時は絶対パスが必要なため、NEXTAUTH_URLを使用
+    const baseUrl = process.env.NEXTAUTH_URL || '';
+    const apiUrl = `${baseUrl}/api/auth/user-permissions`;
+    
     // APIエンドポイントからユーザー権限を取得
-    const response = await fetch('/api/auth/user-permissions', {
+    const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
