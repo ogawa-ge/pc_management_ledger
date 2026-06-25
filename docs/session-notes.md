@@ -565,3 +565,44 @@ ecord_usage_history() 関数実装
 - **開始**: 2026-06-17
 - **完了**: 2026-06-17
 - **実装時間**: 約 1.0 時間
+
+---
+
+### 日付：2026-06-19
+
+#### 概要
+- 作業内容:
+  - Docker起動確認とLambdaStackの再デプロイ（依存ライブラリのパッケージング対応）
+  - ECSStackのデプロイとコンテナ起動エラーループのトラブルシューティング
+  - AWS Secrets Managerへのシークレット作成・フォーマット修正
+
+#### 作業内容詳細
+
+##### 1. LambdaStackの再デプロイ ✅ COMPLETED
+- **対応内容**: `aws-lambda-python-alpha`モジュールの `PythonFunction` を利用し、`requirements.txt` の依存関係（`fastapi` 等）を含めたLambda関数のビルド・デプロイに成功。Lambdaのランタイムエラーを解消した。
+
+##### 2. AWS Secrets Managerのシークレット設定 ✅ COMPLETED
+- **対応内容**: ECSタスクが起動時にシークレットを取得できずクラッシュする問題を解決するため、`AzureAdSecrets` と `GeminiApiKey` をAWS Secrets Managerに作成。
+- **修正**: ECSタスク定義の期待するJSONキー形式に合わせてシークレットの値を修正した。
+
+##### 3. ECSコンテナ起動エラーのトラブルシューティング (実行中) ⚠️ IN-PROGRESS
+- **課題**: ECSタスクが `RUNNING` 直後に `STOPPED` になるクラッシュループが発生。
+- **対応内容**: CloudWatchログを調査し、以下のモジュールエラーを順次解消した。
+  1. **Import Error**: `backend.ecs.src...` となっていたインポートパスをコンテナ環境に合わせて `from src...` に修正。
+  2. **Missing Dependencies**: `requirements.txt` に不足していた `boto3`, `python-dotenv`, `pydantic-settings` を追加。
+  3. **Name Error**: `pc_service.py` にて `Optional` のインポート漏れがあり追記。
+
+#### 次のステップ
+1. **【重要】デプロイ前の事前エラー洗い出しとローカル検証**:
+   - 今回発生したような「import漏れ」「requirements.txtのパッケージ不足」「環境変数の設定漏れ」などのエラーが他のファイルにも潜んでいないか、**次回はデプロイを実行する前にコード全体の静的解析とローカルでの動作確認（ローカルコンテナでの起動テストや、`uvicorn`の実行など）を改めて徹底して行うこと**。
+2. **ECSコンテナ起動状態の確認**:
+   - 修正したコードでECSタスクがクラッシュせず `RUNNING` 状態を維持できるか確認する。
+3. **ECSサービスへのアクセス経路（ALB）の構成確認**:
+   - 現在のECSサービスにApplication Load Balancer (ALB) が設定されていない、またはパブリックアクセス経路が不足している可能性があるため、CDKの構成(`ecs_stack.py`)を見直し、APIエンドポイントのURLを取得・アクセスできるように設定する。
+4. **フロントエンド環境変数の設定**:
+   - 取得したAPIエンドポイントURLをフロントエンドの `.env.local` に設定し、連携テストへ進む。
+
+#### 修正日
+- **開始**: 2026-06-19
+- **完了**: 2026-06-19
+- **実装時間**: 約 2.5 時間

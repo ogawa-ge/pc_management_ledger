@@ -1,5 +1,5 @@
 from typing import Optional
-from backend.ecs.src.models.base import BaseApiModel
+from src.models.base import BaseApiModel
 
 class User(BaseApiModel):
     user_id: str
@@ -12,7 +12,7 @@ class User(BaseApiModel):
 
 class UserRepository:
     def __init__(self, db_client=None):
-        from backend.ecs.src.db import dynamodb
+        from src.db import dynamodb
         self.table = dynamodb.Table('Users')
 
     def get_user_by_id(self, user_id: str) -> Optional[User]:

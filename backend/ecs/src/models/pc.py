@@ -1,7 +1,7 @@
 from typing import Optional, List
 from datetime import datetime
-from backend.ecs.src.db import get_db
-from backend.ecs.src.models.base import BaseApiModel
+from src.db import get_db
+from src.models.base import BaseApiModel
 
 
 class Pc(BaseApiModel):

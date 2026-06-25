@@ -2,13 +2,13 @@ from fastapi import FastAPI, HTTPException, Depends, Request
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 import uuid
-from backend.ecs.src.services.gemini_service import parse_specs
-from backend.ecs.src.services.pc_service import create_pc, record_usage_history
-from backend.ecs.src.models.user import UserRepository
-from backend.ecs.src.models.return_record import ReturnRecordRepository
-from backend.ecs.src.models.pc import PcRepository, Pc, PcCreateRequest, PcParseRequest, PcReturnRequest
-from backend.ecs.src.models.user import User
-from backend.ecs.src.db import dynamodb
+from src.services.gemini_service import parse_specs
+from src.services.pc_service import create_pc, record_usage_history
+from src.models.user import UserRepository
+from src.models.return_record import ReturnRecordRepository
+from src.models.pc import PcRepository, Pc, PcCreateRequest, PcParseRequest, PcReturnRequest
+from src.models.user import User
+from src.db import dynamodb
 from dotenv import load_dotenv
 import os
 

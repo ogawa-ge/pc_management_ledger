@@ -1,8 +1,8 @@
-from typing import Dict, Any
-from backend.ecs.src.models.pc import Pc, PcRepository
-from backend.ecs.src.services.gemini_service import parse_specs
-from backend.ecs.src.models.return_record import ReturnRecord, ReturnRecordRepository
-from backend.ecs.src.models.usage_history import UsageHistory, UsageHistoryRepository
+from typing import Dict, Any, Optional
+from src.models.pc import Pc, PcRepository
+from src.services.gemini_service import parse_specs
+from src.models.return_record import ReturnRecord, ReturnRecordRepository
+from src.models.usage_history import UsageHistory, UsageHistoryRepository
 from datetime import datetime
 import re
 import uuid

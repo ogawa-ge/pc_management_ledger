@@ -7,6 +7,7 @@ from aws_cdk import (
     aws_dynamodb as dynamodb,
     aws_secretsmanager as secretsmanager,
 )
+import aws_cdk.aws_lambda_python_alpha as lambda_python
 from constructs import Construct
 
 class LambdaStack(Stack):
@@ -24,13 +25,14 @@ class LambdaStack(Stack):
         # Lambda関数を作成
         # プロジェクトルートからのパスを解決
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        lambda_src_dir = os.path.join(base_dir, "backend", "lambda", "src")
+        lambda_src_dir = os.path.join(base_dir, "backend", "lambda")
 
-        api_lambda = _lambda.Function(
+        api_lambda = lambda_python.PythonFunction(
             self, "ApiLambda",
+            entry=lambda_src_dir,  # lambda フォルダを指定。直下に requirements.txt がある
+            index="src/main.py",   # エントリポイントのファイル
+            handler="lambda_handler",
             runtime=_lambda.Runtime.PYTHON_3_9,
-            handler="main.lambda_handler",
-            code=_lambda.Code.from_asset(lambda_src_dir),
             timeout=Duration.seconds(30),
             environment={
                 "USERS_TABLE_NAME": users_table.table_name if users_table else "Users",

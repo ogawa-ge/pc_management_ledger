@@ -1,7 +1,7 @@
 from typing import Optional, List
 from datetime import datetime
-from backend.ecs.src.db import dynamodb
-from backend.ecs.src.models.base import BaseApiModel
+from src.db import dynamodb
+from src.models.base import BaseApiModel
 
 
 class UsageHistory(BaseApiModel):
