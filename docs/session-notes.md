@@ -606,3 +606,96 @@ ecord_usage_history() 関数実装
 - **開始**: 2026-06-19
 - **完了**: 2026-06-19
 - **実装時間**: 約 2.5 時間
+// ... existing code ...
+#### 修正日
+- **開始**: 2026-06-19
+- **完了**: 2026-06-19
+- **実装時間**: 約 2.5 時間
+
+---
+
+### 日付：2026-06-25 (次回作業用セッションノート)
+
+#### 概要
+- 作業内容:
+  - AWSデプロイ状況と実行ログ（CloudWatch Logs）の全容把握および原因特定
+  - インフラの稼働ステータスと、コンテナおよびLambdaでのプログラム実行時エラーの確認
+  - セッションノートへの現状詳細と解決手順の記録
+
+#### 現状のデプロイステータス
+
+##### 1. CloudFormation (CDK スタック) ✅ デプロイ完了
+以下のすべてのスタックはCloudFormation上ではすでに **`UPDATE_COMPLETE`** または **`CREATE_COMPLETE`** の状態になっており、インフラのリソース（VPC、ECS、DynamoDB、Lambda等）は正常に作成済みです。
+- `DatabaseStack`: DynamoDBテーブル（`Users`, `PCs`, `ReturnRecords`, `PCUsageHistories`）作成完了
+- `LambdaStack`: Lambda関数（`LambdaStack-ApiLambda`）デプロイ完了
+- `EcsStack`: ECSクラスター、Fargate サービス、タスク定義、セキュリティグループ、NATゲートウェイ含むVPC作成完了
+
+##### 2. 稼働中のコンテナとLambdaの問題点 ⚠️ 実行時クラッシュ
+CDKによるAWSリソースの作成は成功していますが、以下のソフトウェア実行時エラー（ランタイムエラー）が発生しており、アプリケーションとしては未完成・未稼働の状態です。
+
+---
+
+#### 実行時エラーの分析と原因
+
+##### ① ECSコンテナ側: `NameError: name 'Optional' is not defined` による起動時クラッシュ
+- **現象**: 
+  ECS Fargate上のタスク（コンテナ）が、Uvicornサーバー起動直後にエラーを出力してクラッシュを繰り返す状態（クラッシュループ）になっていました。
+- **ログトレース**:
+  ```text
+  File "/app/src/main.py", line 6, in <module>
+    from src.services.pc_service import create_pc, record_usage_history
+  File "/app/src/services/pc_service.py", line 111, in <module>
+    user_id: Optional[str] = None,
+             ^^^^^^^^
+  NameError: name 'Optional' is not defined
+  ```
+- **原因**: 
+  現在AWSにデプロイされているコンテナ内の `pc_service.py` のファイルで、`Optional` が適切にインポートされていない（または古いコンテナイメージが参照されている）ことが原因です。
+  ローカル側では既に修正が施されているか、もしくはCDKの差分にコンテナ更新が保留されています（`npx cdk diff` を実行すると、ECSのタスク定義内でコンテナイメージアセットが新しいタグに変更予定のまま保留されていることが確認できます）。
+
+##### ② Lambda側: API Gateway未設定による `RuntimeError` (Mangum)
+- **現象**:
+  `LambdaStack-ApiLambda` 関数をAWS CLI等でテスト実行した際に、正常に処理されず `RuntimeError` を出力していました。
+- **ログトレース**:
+  ```text
+  [ERROR] RuntimeError: The adapter was unable to infer a handler to use for the event.
+  This is likely related to how the Lambda function was invoked. (Are you testing locally? Make sure the request payload is valid for a supported handler.)
+  Traceback (most recent call last):
+    File "/var/task/src/main.py", line 60, in lambda_handler
+      return handler(event, context)
+    File "/var/task/mangum/adapter.py", line 76, in __call__
+      handler = self.infer(event, context)
+  ```
+- **原因**:
+  FastAPIアプリケーションをLambdaで動かすために `Mangum` アダプターを使用していますが、CDK定義（`lambda_stack.py`）上に **API Gateway (HTTP API/REST API) または Lambda Function URL が設定されていません**。
+  そのため、HTTPリクエストとしてのイベントペイロードがLambdaに伝達されず、Mangumがリクエスト形式を認識できずに例外をスローしています。
+
+---
+
+#### 次回開始時の明確な解決手順
+
+次回の作業再開時は、以下の手順を順番に実行することで、コンテナの復旧とAPIの公開を確実に進めることができます。
+
+##### ステップ 1. Lambdaに API Gateway (HTTP API) を設定する
+FastAPIのエンドポイントを外部からリクエストできるようにするため、`infrastructure/stacks/lambda_stack.py` に API Gateway のリソースを追加します。
+- `aws_apigatewayv2` もしくは `aws_apigatewayv2_integrations` を使用して、ApiLambdaを統合した HTTP API（または REST API）を作成・設定し、デプロイ時にAPIのパブリックURLが出力されるようにします。
+
+##### ステップ 2. 最新コードをAWS環境にデプロイする
+ローカルで修正した最新のECSコンテナコードと、追加したAPI Gateway設定をまとめてAWSにデプロイします。
+```bash
+cd infrastructure
+npx cdk deploy --all
+```
+- これにより、ECSのコンテナイメージアセットが再ビルド・再アップロードされ、`Optional` のインポートエラーを解決した新規タスクが起動します。
+- また、API Gatewayが作成され、Lambda（FastAPI）をパブリックに叩けるURLがターミナルに出力されます。
+
+##### ステップ 3. 動作確認
+- ECSコンテナのタスクステータスが `RUNNING` で安定することを確認。
+- 出力されたAPI GatewayのURLに対して、APIリクエストが正常に応答することを確認。
+- フロントエンドの `.env.local` のAPIエンドポイントに新しくデプロイしたURLを設定。
+
+---
+
+- **作成日**: 2026-06-25
+- **作成者**: AI Assistant
+- **想定作業時間**: 約 1.0 〜 1.5 時間
