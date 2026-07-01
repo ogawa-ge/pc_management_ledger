@@ -46,6 +46,36 @@
 - `curl -i https://ssotygin67.execute-api.ap-northeast-1.amazonaws.com/` -> `{"Hello":"World"}` (200 OK)
 - `/api/pcs` へアクセス時、コールドスタート動作（503 を返しつつ、裏で自動的に ECS タスクが起動し、数秒後に 200 OK を返す透過プロキシ動作）が完璧に機能することを確認。
 
+##### 7. 次回作業：AWS Amplify へのデプロイ手順 📌 NEXT STEP
+次回セッションでスムーズにフロントエンドを AWS Amplify にデプロイして本番公開を完了させるため、以下の手順を整理しました。
+
+###### 事前準備
+1. **コードのプッシュ確認**:
+   - 本セッションにおける修正内容（フロントエンドの型エラー修正、ルート `.gitignore` 更新等）はすべて Git リポジトリ（ブランチ: `001-pc-management`）へプッシュ済みです。
+2. **本番用 API URL の確認**:
+   - バックエンドの API Gateway URL は以下になります：
+     `https://ssotygin67.execute-api.ap-northeast-1.amazonaws.com`
+
+###### デプロイ手順（AWS Amplify コンソール上での操作）
+1. **Amplify コンソールにアクセス**:
+   - AWS マネジメントコンソールで **AWS Amplify** を開きます。
+2. **新しいアプリの作成**:
+   - 「新しいアプリを作成」または「ウェブアプリをホスト」をクリックします。
+3. **GitHub リポジトリの選択と連携**:
+   - サービスプロバイダーとして「GitHub」を選択し、リポジトリ連携を承認します。
+   - リポジトリ：`pc_management_ledger`
+   - ブランチ：`001-pc-management`
+4. **ビルド設定（Build settings）の構成**:
+   - デプロイの構成画面で、Next.js アプリケーション用の自動検出されたビルド設定が表示されます。
+   - **環境変数（Environment variables）の設定**:
+     「環境変数」セクションを展開し、以下の変数（キーと値）を追加します（これがフロントエンドが本番バックエンドと疎通するために必要不可欠です）：
+     - **キー (Key)**: `NEXT_PUBLIC_API_URL`
+     - **値 (Value)**: `https://ssotygin67.execute-api.ap-northeast-1.amazonaws.com`
+5. **保存してデプロイ（Save and deploy）**:
+   - 「保存してデプロイ」をクリックして、Next.js アプリのビルド、検証、公開を待ちます（およそ 2~3 分で自動的に完了します）。
+6. **URL の確認と動作テスト**:
+   - デプロイ完了後に Amplify が生成するパブリック URL（例：`https://main.xxxxxx.amplifyapp.com`）にアクセスし、ログイン、PC 一覧の確認、スペック抽出などが本番バックエンドと連動して機能するか最終確認を行います。
+
 ---
 
 ### 日付：2026-06-02
