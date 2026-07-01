@@ -13,3 +13,14 @@ __pycache__/
 out/
 .terraform/
 .vscode/
+
+# CDK build outputs
+cdk.out/
+
+# Debug and log outputs
+debug_events.txt
+debug_stream.txt
+error_logs*.txt
+raw_events.json
+log_output.txt
+logs.json

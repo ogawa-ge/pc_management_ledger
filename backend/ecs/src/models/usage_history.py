@@ -17,11 +17,14 @@ class UsageHistory(BaseApiModel):
     created_at: str
 
 
+import os
+
 class UsageHistoryRepository:
     """PC 利用履歴リポジトリ"""
     
     def __init__(self):
-        self.table = dynamodb.Table('PC_Usage_History')
+        table_name = os.getenv('USAGE_HISTORY_TABLE_NAME', 'PCUsageHistories')
+        self.table = dynamodb.Table(table_name)
     
     def create_record(self, record: UsageHistory) -> UsageHistory:
         """利用履歴レコードを作成"""

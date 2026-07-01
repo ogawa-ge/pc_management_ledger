@@ -25,7 +25,7 @@ logs_client = boto3.client("logs")
 class ECSManager:
     """ECS タスクの起動・停止・スリープ管理を行うクラス"""
 
-    def __init__(self, cluster_name: str = "pc-management-cluster"):
+    def __init__(self, cluster_name: str = "PCManagementCluster"):
         """
         ECSManager を初期化します
 
@@ -35,7 +35,7 @@ class ECSManager:
         self.ecs_client = boto3.client("ecs")
         self.dynamodb = boto3.resource("dynamodb")
         self.cluster_name = cluster_name
-        self.task_definition = "pc-management-ecs-task"
+        self.task_definition = "PCManagementTaskDefinition"
         # ECS のスリープを実現するため、タスク数を 0 に設定する状態を「スリープ」と定義
         self.sleep_task_count = 0
         self.active_task_count = 1
@@ -45,16 +45,84 @@ class ECSManager:
         # ロググループの存在確認と作成
         self._ensure_log_group()
 
+    def get_ecs_public_ip(self) -> Optional[str]:
+        """
+        実行中の ECS タスクのパブリック IP アドレスを取得します。
+        
+        Returns:
+            Optional[str]: タスクのパブリック IP アドレス、または None（起動中ではない、または IP 未割当の場合）
+        """
+        try:
+            # 1. サービスに属するタスクの一覧を取得
+            tasks_response = self.ecs_client.list_tasks(
+                cluster=self.cluster_name,
+                serviceName="PCManagementService",
+                desiredStatus="RUNNING"
+            )
+            
+            task_arns = tasks_response.get("taskArns", [])
+            if not task_arns:
+                return None
+            
+            # 2. タスクの詳細を取得して ENI のアタッチメントを特定
+            tasks_detail = self.ecs_client.describe_tasks(
+                cluster=self.cluster_name,
+                tasks=[task_arns[0]]
+            )
+            
+            tasks = tasks_detail.get("tasks", [])
+            if not tasks:
+                return None
+                
+            task = tasks[0]
+            # タスクが完全に RUNNING でない場合は IP の取得を待つ必要がある
+            if task.get("lastStatus") != "RUNNING":
+                return None
+                
+            attachments = task.get("attachments", [])
+            eni_id = None
+            for attachment in attachments:
+                if attachment.get("type") == "ElasticNetworkInterface":
+                    details = attachment.get("details", [])
+                    for detail in details:
+                        if detail.get("name") == "networkInterfaceId":
+                            eni_id = detail.get("value")
+                            break
+            
+            if not eni_id:
+                return None
+                
+            # 3. EC2 クライアントで ENI の情報を取得してパブリック IP を抽出
+            ec2_client = boto3.client("ec2")
+            eni_response = ec2_client.describe_network_interfaces(
+                NetworkInterfaceIds=[eni_id]
+            )
+            
+            interfaces = eni_response.get("NetworkInterfaces", [])
+            if not interfaces:
+                return None
+                
+            association = interfaces[0].get("Association", {})
+            public_ip = association.get("PublicIp")
+            return public_ip
+            
+        except Exception as e:
+            logger.error(f"Failed to get ECS public IP: {str(e)}")
+            return None
+
     def _ensure_log_group(self) -> None:
         """CloudWatch Logs のロググループを確認し、なければ作成します"""
         try:
-            logs_client.describe_log_groups(logGroupNamePrefix=self.log_group_name)
-        except logs_client.exceptions.ResourceNotFoundException:
             try:
-                logs_client.create_log_group(logGroupName=self.log_group_name)
-                logger.info(f"Created log group: {self.log_group_name}")
-            except Exception as e:
-                logger.warning(f"Failed to create log group: {str(e)}")
+                logs_client.describe_log_groups(logGroupNamePrefix=self.log_group_name)
+            except logs_client.exceptions.ResourceNotFoundException:
+                try:
+                    logs_client.create_log_group(logGroupName=self.log_group_name)
+                    logger.info(f"Created log group: {self.log_group_name}")
+                except Exception as e:
+                    logger.warning(f"Failed to create log group: {str(e)}")
+        except Exception as e:
+            logger.warning(f"Failed to ensure log group exists: {str(e)}")
 
     def _log_audit(self, action: str, status: str, details: Dict[str, Any] = None) -> None:
         """
@@ -129,7 +197,7 @@ class ECSManager:
         try:
             # 現在の ECS サービスの状態を確認
             service_response = self.ecs_client.describe_services(
-                cluster=self.cluster_name, services=["pc-management-service"]
+                cluster=self.cluster_name, services=["PCManagementService"]
             )
 
             current_count = service_response["services"][0].get("desiredCount", 0)
@@ -150,7 +218,7 @@ class ECSManager:
             # サービスの desired count を 1 に更新（起動）
             update_response = self.ecs_client.update_service(
                 cluster=self.cluster_name,
-                service="pc-management-service",
+                service="PCManagementService",
                 desiredCount=self.active_task_count,
             )
 
@@ -200,7 +268,7 @@ class ECSManager:
             # サービスの desired count を 0 に更新（スリープ）
             update_response = self.ecs_client.update_service(
                 cluster=self.cluster_name,
-                service="pc-management-service",
+                service="PCManagementService",
                 desiredCount=self.sleep_task_count,
             )
 
@@ -241,7 +309,7 @@ class ECSManager:
         """
         try:
             service_response = self.ecs_client.describe_services(
-                cluster=self.cluster_name, services=["pc-management-service"]
+                cluster=self.cluster_name, services=["PCManagementService"]
             )
 
             service = service_response["services"][0]

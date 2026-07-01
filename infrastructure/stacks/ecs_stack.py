@@ -71,6 +71,15 @@ class EcsStack(Stack):
             cluster=cluster,
             task_definition=task_definition,
             desired_count=1,
+            service_name="PCManagementService",
+            assign_public_ip=True,
+            vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC)
+        )
+
+        # HTTPポート(80)へのアクセスを許可
+        service.connections.allow_from_any_ipv4(
+            ec2.Port.tcp(80),
+            "Allow HTTP access from anywhere for Lambda Proxy forwarding"
         )
 
         # Lambda関数用のIAMロールを作成
@@ -85,3 +94,4 @@ class EcsStack(Stack):
             pcs_table.grant_read_write_data(task_definition.task_role)
         if pc_usage_histories_table:
             pc_usage_histories_table.grant_read_write_data(task_definition.task_role)
+

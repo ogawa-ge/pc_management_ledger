@@ -10,6 +10,44 @@
 
 ## セッション履歴
 
+### 日付：2026-07-01
+
+#### 概要
+- 作業内容:
+  - 実行時エラーの解消：`backend/lambda/src/main.py` の markdown シンタックスエラーの修正
+  - `ecs_manager.py` の `start_ecs` などのインデントエラーの修正
+  - データベース接続設定修正：DynamoDBリージョン設定を `us-east-1` から実環境の `ap-northeast-1` に適応
+  - IAM 権限の不備修正：API Lambda に ECS タスク管理および EC2 ENI 参照権限（`ecs:*`, `ec2:DescribeNetworkInterfaces`）を追加
+  - ECS ネットワークポート不整合の解消：`backend/ecs/Dockerfile` を `port 80` に変更し、ポート 80 でリクエストを受け付けられるように修正
+  - 全スタック（LambdaStack, EcsStack）の再デプロイおよび疎通確認成功（200 OK）
+
+#### 作業内容詳細
+
+##### 1. Lambda 実行時エラーの解消 ✅ COMPLETED
+- `backend/lambda/src/main.py` の先頭と末尾にあった不要な markdown バッククォート（` ```python `）を削除。
+- `ecs_manager.py` の `start_ecs`, `stop_ecs`, `get_ecs_status` が不適切にインデントされていたバグを修正。
+
+##### 2. リージョン設定とテーブル命名規則の統一 ✅ COMPLETED
+- `backend/lambda/src/db.py` および `backend/ecs/src/db.py` のハードコードされた `region_name='us-east-1'` を環境変数および `ap-northeast-1`（実環境）に適応。
+- `usage_history.py` でテーブル名が `PC_Usage_History` とハードコードされ、CDKで作成された `PCUsageHistories` と乖離していたため、環境変数 `USAGE_HISTORY_TABLE_NAME` を優先するよう修正。
+
+##### 3. API Lambda の IAM 権限の追加 ✅ COMPLETED
+- `infrastructure/stacks/lambda_stack.py` に、ECS Waking/Sleeping プロキシ制御に必要な `ecs:ListTasks`, `ecs:DescribeTasks`, `ecs:DescribeServices`, `ecs:UpdateService`, `ec2:DescribeNetworkInterfaces` の IAM 権限を追加。
+
+##### 4. ポート不整合の解消 ✅ COMPLETED
+- ECSコンテナ（`backend/ecs/Dockerfile`）が `--port 8000` で起動しており、CDK/プロキシ側がポート `80` でアクセスを試みて `Connection Refused` になっていた問題を修正（Dockerfile のポートを `80` へ変更してビルドし直すことで解決）。
+
+##### 5. フロントエンドの型エラー修正とビルド確認 ✅ COMPLETED
+- `src/app/pcs/page.tsx` において `Button` の `variant="outline"` 指定による型エラーが発生していたため、`ButtonProps` に `variant` プロパティを追加し、UI側のスタイルを適用できるよう `button.tsx` を修正。
+- `npm run build` が完全にエラーフリー（Compiled successfully）でビルド成功し、AWS Amplify 等へのデプロイがいつでも可能な状態に整備完了。
+
+##### 6. 疎通・コールドスタート動作確認 ✅ COMPLETED
+- `npx cdk deploy LambdaStack` & `EcsStack` を実行し、デプロイ完了。
+- `curl -i https://ssotygin67.execute-api.ap-northeast-1.amazonaws.com/` -> `{"Hello":"World"}` (200 OK)
+- `/api/pcs` へアクセス時、コールドスタート動作（503 を返しつつ、裏で自動的に ECS タスクが起動し、数秒後に 200 OK を返す透過プロキシ動作）が完璧に機能することを確認。
+
+---
+
 ### 日付：2026-06-02
 
 #### 概要
@@ -699,3 +737,74 @@ npx cdk deploy --all
 - **作成日**: 2026-06-25
 - **作成者**: AI Assistant
 - **想定作業時間**: 約 1.0 〜 1.5 時間
+
+---
+
+### 日付：2026-06-29
+
+#### 概要
+- 作業内容:
+  - Lambdaへの API Gateway (HTTP API) 統合
+  - ECSパブリックIPの動的取得ロジック（`ecs_manager.py`）の実装
+  - ゼロコスト待機のためのFastAPI透過プロキシと、ECSが停止している場合の自動起動（コールドスタート制御）の実装
+  - Lambdaのファイル名・インポートパス競合（ハイフン命名規則およびディレクトリパス問題）の解消
+  - AWS環境へのCDK一括デプロイの成功（DatabaseStack, LambdaStack, EcsStack）
+  - Windowsターミナル文字コード競合を回避したCloudWatch Logsデバッグ環境（`fetch_logs.py`）の確立
+
+#### 作業内容詳細
+
+##### 1. Lambda への API Gateway (HTTP API) 統合とデプロイ ✅ COMPLETED
+- **対応内容**: API Gatewayの全リクエストを `ApiLambda` へプロキシ統合。
+- **デプロイ成果**:
+  - API Gateway へのパブリックエンドポイントURLが確定しました。
+  - **ApiUrl**: `https://ssotygin67.execute-api.ap-northeast-1.amazonaws.com`
+
+##### 2. ゼロコスト待機・自動起動リバースプロキシの構築 ✅ COMPLETED
+- **ECSタスクパブリックIPの動的検出**:
+  - `ecs_manager.py` 内に、Fargateサービス `PCManagementService` の実行中のタスクを検出し、そのENIからパブリックIPを解決するロジック `get_ecs_public_ip` をBoto3経由で実装。
+- **コールドスタート制御**:
+  - ECSタスクがスリープしている（タスク数 0）の場合、Lambda側が非同期でECSタスクの起動をトリガー（自動起動）し、フロントエンドに `503 Service Unavailable`（`Retry-After: 15` ヘッダー付き）を返して15秒後のリトライを促すロジックを FastAPI に実装. これによって、月額20ドルのロードバランサー代を完全に 0 円化！
+- **セキュリティとIP配置**:
+  - ECSタスクをパブリックサブネットに配置し、`assign_public_ip=True` を設定。さらにインバウンドTCP 80ポートを明示的に解放。
+
+##### 3. Lambdaの実行時インポートエラーと命名規則の修正 ✅ COMPLETED
+- **課題**: Lambdaの初回起動時に `ImportModuleError` が発生。
+- **原因と対応**:
+  - ファイル名にハイフンが含まれる `auth-service.py` および `ecs-manager.py` は、Pythonの標準インポート（`import`）が文法エラーになるため、`auth_service.py` および `ecs_manager.py` に `git mv` を用いてアンダースコア名に統一・リネーム。
+  - `main.py` 内のインポートパスを `src.services.auth_service` に修正。
+  - 修正後、CDKによる一括デプロイを正常に完了。
+
+##### 4. ロバストなログデバッグ環境 `fetch_logs.py` の作成 ✅ COMPLETED
+- **課題**: Windowsターミナル (PowerShell) の Shift-JIS (cp932) エンコーディング特性により、`aws logs` から流れる UTF-8 特有文字（ノーブレークスペースなど）が含まれるエラーメッセージを取得しようとするとクラッシュしていた。
+- **対応**: ターミナルの文字コード警告を無視し、生バイト列からJSON形式をスライス抽出して、確実に最新のエラーメッセージだけをUTF-8で保存する専用スクリプト `fetch_logs.py` を作成。
+
+---
+
+#### 現在のステータスと直面している課題
+- **インフラデプロイ**: 一括デプロイは DatabaseStack, LambdaStack, EcsStack すべて **正常完了**。
+- **エンドポイント**: `https://ssotygin67.execute-api.ap-northeast-1.amazonaws.com`
+- **現在の課題**:
+  - API Gateway 経由でアクセスした際、まだ `Internal Server Error` が返る。
+  - 最新の実行時エラーが `fetch_logs.py` を走らせることで特定できるところまで到達。
+
+---
+
+#### 次回開始時の明確な解決手順
+
+次回は以下のロードマップに沿って進めることで、最速で疎通から動作確認までを完了できます。
+
+##### ステップ 1. 最新エラーログの確認
+- `.\infrastructure\.venv\Scripts\python.exe fetch_logs.py` をターミナルで実行。
+- `error_logs_fresh20.txt` に最新のスタックトレースが書き込まれるので、その内容（例：FastAPIが初期ロード時に参照しているモジュールエラーやDynamoDB権限等）を確認する。
+
+##### ステップ 2. エラー修正と Lambda の高速再デプロイ
+- 特定されたエラー箇所（モジュールインポートパスや環境変数の不整合など）を修正。
+- 修正後、インフラに影響を与えずにLambdaのコードだけを爆速で更新します：
+  ```powershell
+  npx cdk deploy LambdaStack --app ".\infrastructure\.venv\Scripts\python.exe infrastructure/app.py" --require-approval never
+  ```
+
+##### ステップ 3. 自動スリープ・自動起動（透過プロキシ）の検証
+- APIエンドポイント（`https://ssotygin67.execute-api.ap-northeast-1.amazonaws.com/`）へアクセスし、疎通が成功することを確認。
+- ECSタスク数 0（停止中）の状態で、`/api/pcs` へアクセスし、Lambdaが `503` レスポンスを返しつつ裏でECSタスクが自動起動することを確認。
+- 15秒〜30秒後、ECSが起動完了したら自動的にリバースプロキシが起動IPを検知してデータが返ってくることを確認。
