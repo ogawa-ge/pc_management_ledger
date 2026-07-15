@@ -10,6 +10,48 @@
 
 ## セッション履歴
 
+### 日付：2026-07-13
+
+#### 概要
+- 作業内容:
+  - AWS Amplify へのフロントエンドデプロイと 404 エラーの解決
+  - Next.js SSR 対応のためのモノレポ設定および `amplify.yml` の修正
+  - Azure AD（Entra ID）の認証リダイレクト URI 設定の修正
+  - 本番環境での Microsoft アカウントログインの成功確認
+
+#### 作業内容詳細
+
+##### 1. Amplify デプロイ時の 404 エラー解決 ✅ COMPLETED
+- **課題**: Amplify へのデプロイ後、サイトにアクセスすると 404 エラーが発生。
+- **原因**: プロジェクトのルートディレクトリに `package.json` がないモノレポ構成であったため、Amplify が Next.js の SSR を自動検出できず、「静的ウェブサイト (Web Static)」として誤ってプロビジョニングしていた。
+- **対応**: 
+  - Amplify アプリを一度削除し、新規作成時に「モノレポ」設定を有効化。
+  - アプリのディレクトリ（App directory）を `frontend` に指定。
+  - ビルド設定（`amplify.yml`）にモノレポ仕様（`applications` キー）を導入し、SSR（Web Dynamic）プラットフォームとして正しく再構築させた。
+
+##### 2. Azure AD 認証エラーの解消 ✅ COMPLETED
+- **課題**: Microsoft サインイン画面で「指定されたリダイレクト URI が登録されていない」旨のエラーが発生。
+- **原因**: 
+  1. Amplify の環境変数 `NEXTAUTH_URL` に誤って `/login` までのパスが含まれていたため、NextAuth が不正なコールバック URI (`.../login/callback/azure-ad`) を生成していた。
+  2. Azure AD 側に新しい Amplify アプリのドメインが登録されていなかった。
+- **対応**: 
+  - `NEXTAUTH_URL` をルートドメインのみ（`https://001-pc-management.d2vdxg5wq5iczb.amplifyapp.com`）に修正。
+  - Azure Portal でリダイレクト URI として `https://001-pc-management.d2vdxg5wq5iczb.amplifyapp.com/api/auth/callback/azure-ad` を登録。
+- **結果**: 本番環境での Microsoft アカウントログインに成功！
+
+##### 3. 次回作業：ログイン後のデータ取得エラー等の調査 📌 NEXT STEP
+ログイン自体は成功したが、その後 PC 一覧画面等への後続処理が正常に継続しない事象が確認された。
+
+**次回の調査・解決ステップ**:
+1. **フロントエンドのエラー確認**:
+   - ブラウザの Developer Tools (F12) の Console および Network タブを確認し、API バックエンド（`https://ssotygin67...`）へのリクエストがどのように失敗しているか（CORS エラー、500 Internal Server Error など）を特定する。
+2. **バックエンド API の状態確認**:
+   - 以前構築した ECS/Lambda によるゼロコスト待機（透過プロキシ）が本番フロントエンドからのリクエストを正しく処理し、起動完了後に応答を返せているか、CloudWatch Logs (`fetch_logs.py` 等) を用いて調査する。
+3. **CORS 設定の確認**:
+   - バックエンド (FastAPI) の `CORS` 許可オリジンに、新しい Amplify の本番ドメインが正しく許可されているか確認・追加する。
+
+---
+
 ### 日付：2026-07-01
 
 #### 概要

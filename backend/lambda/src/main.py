@@ -2,12 +2,25 @@ import json
 import urllib3
 from fastapi import FastAPI, Depends, Request, Response
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer
 from jose import JWTError, jwt
 from typing import Optional
 from src.services.ecs_manager import get_ecs_manager
 
 app = FastAPI()
+
+# CORS設定
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "https://001-pc-management.d2vdxg5wq5iczb.amplifyapp.com",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # 認証スキームの定義
 security = HTTPBearer()

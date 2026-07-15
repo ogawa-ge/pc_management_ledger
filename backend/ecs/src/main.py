@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, Depends, Request
+from fastapi.middleware.cors import CORSMiddleware
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 import uuid
@@ -16,6 +17,17 @@ import os
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "../../../.env.local"))
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "https://001-pc-management.d2vdxg5wq5iczb.amplifyapp.com",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # ========== RBAC Helper Functions ==========
@@ -69,8 +81,6 @@ def require_admin(func):
         return await func(*args, **kwargs)
     
     return wrapper
-
-app = FastAPI()
 
 @app.get("/")
 def read_root():
