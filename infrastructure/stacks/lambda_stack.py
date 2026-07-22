@@ -79,6 +79,15 @@ class LambdaStack(Stack):
             )
         )
 
+        api_lambda.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "logs:DescribeLogGroups",
+                ],
+                resources=["*"]
+            )
+        )
+
         # API Gateway (HTTP API) の作成
         http_api = apigwv2.HttpApi(
             self, "HttpApi",
