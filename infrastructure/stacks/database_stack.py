@@ -49,8 +49,19 @@ class DatabaseStack(Stack):
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST
         )
 
+        system_activity_table = dynamodb.Table(
+            self, "SystemActivity",
+            table_name="SystemActivity",
+            partition_key=dynamodb.Attribute(
+                name="entityId",
+                type=dynamodb.AttributeType.STRING
+            ),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST
+        )
+
         # テーブルを属性として保持（他スタックからの参照用）
         self.users_table = users_table
         self.pcs_table = pcs_table
         self.return_records_table = return_records_table
         self.pc_usage_histories_table = pc_usage_histories_table
+        self.system_activity_table = system_activity_table

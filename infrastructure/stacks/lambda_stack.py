@@ -8,6 +8,8 @@ from aws_cdk import (
     aws_secretsmanager as secretsmanager,
     aws_apigatewayv2 as apigwv2,
     aws_apigatewayv2_integrations as apigwv2_integrations,
+    aws_events as events,
+    aws_events_targets as targets,
     CfnOutput,
 )
 import aws_cdk.aws_lambda_python_alpha as lambda_python
@@ -16,7 +18,7 @@ from constructs import Construct
 class LambdaStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, 
                  users_table=None, pcs_table=None, return_records_table=None, 
-                 pc_usage_histories_table=None, **kwargs) -> None:
+                 pc_usage_histories_table=None, system_activity_table=None, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
         # Azure AD シークレットの参照
@@ -56,6 +58,8 @@ class LambdaStack(Stack):
             return_records_table.grant_read_write_data(api_lambda)
         if pc_usage_histories_table:
             pc_usage_histories_table.grant_read_write_data(api_lambda)
+        if system_activity_table:
+            system_activity_table.grant_read_write_data(api_lambda)
 
         # ECS 起動・停止および ENI 情報取得のための IAM 権限を追加
         api_lambda.add_to_role_policy(
@@ -114,6 +118,45 @@ class LambdaStack(Stack):
             methods=[apigwv2.HttpMethod.ANY],
             integration=lambda_integration
         )
+
+        # ECS自動スリープのためのタイムアウトチェック Lambda
+        timeout_check_lambda = lambda_python.PythonFunction(
+            self, "TimeoutCheckLambda",
+            entry=lambda_src_dir,
+            index="src/services/ecs_manager.py",
+            handler="lambda_handler_cloudwatch_timeout_check",
+            runtime=_lambda.Runtime.PYTHON_3_9,
+            timeout=Duration.seconds(30),
+        )
+
+        # IAM権限の付与
+        if system_activity_table:
+            system_activity_table.grant_read_write_data(timeout_check_lambda)
+        
+        timeout_check_lambda.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "ecs:ListTasks",
+                    "ecs:DescribeTasks",
+                    "ecs:DescribeServices",
+                    "ecs:UpdateService",
+                ],
+                resources=["*"]
+            )
+        )
+        timeout_check_lambda.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=["logs:DescribeLogGroups", "logs:CreateLogGroup"],
+                resources=["*"]
+            )
+        )
+
+        # 1時間ごとの EventBridge ルール
+        rule = events.Rule(
+            self, "EcsTimeoutCheckRule",
+            schedule=events.Schedule.rate(Duration.hours(1))
+        )
+        rule.add_target(targets.LambdaFunction(timeout_check_lambda))
 
         # デプロイ後にAPIのパブリックURLを出力する
         CfnOutput(
