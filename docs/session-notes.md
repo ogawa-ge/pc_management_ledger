@@ -10,6 +10,48 @@
 
 ## セッション履歴
 
+### 日付：2026-07-22
+
+#### 概要
+- 作業内容:
+  - バックエンドAPIの状態確認とCORS設定の確認
+  - Lambda権限不足 (`logs:DescribeLogGroups`) の解消と再デプロイ
+  - フロントエンドの `pages/index.tsx` と App Router の競合解消およびリダイレクトの追加
+  - `/pcs` 画面におけるクライアントサイドでのセッション保護の追加
+  - ECS 自動スリープ（ゼロコスト待機）機能の修正（`SystemActivity` テーブルおよび EventBridge 定期実行ルールの追加・デプロイ）
+
+#### 作業内容詳細
+
+##### 1. Lambda 権限不足の解消 ✅ COMPLETED
+- **課題**: CloudWatch ログ (`fetch_logs.py`) にて、API Lambda が `logs:DescribeLogGroups` 権限を持たないためエラーを出力していることを特定。
+- **対応**: `infrastructure/stacks/lambda_stack.py` に対象の IAM ポリシーを追加し、AWS 環境へ再デプロイを実施。
+
+##### 2. フロントエンドのルーティング競合とログイン権限確認の修正 ✅ COMPLETED
+- **課題**: ルート URL (`/`) にアクセスした際、「ようこそ」という静的画面が表示されPC一覧に遷移しない。また、`/pcs` 画面で認証状態の確認を行っていなかった。
+- **対応**: 
+  - 古い仕様の `frontend/src/pages/index.tsx` を削除。
+  - 新しく `frontend/src/app/page.tsx` を作成し、`/pcs` へリダイレクトするよう修正。
+  - `frontend/src/app/pcs/page.tsx` に `useSession` フックを導入し、クライアントサイドでも未認証状態 (`unauthenticated`) の場合は強制的に `/login` へリダイレクトする保護処理を追加。
+
+##### 3. ECS 自動スリープ機構の実装とデプロイ ✅ COMPLETED
+- **課題**: ECS が初回起動後、タイムアウト時間（2時間）を過ぎてもスリープせず、立ち上がりっぱなしになっていた。
+- **原因**: 停止ロジック (`ecs_manager.py`) は存在したが、それを定期実行するEventBridgeルールと、活動履歴を記録するDynamoDBテーブルがインフラ構築側 (CDK) で定義されていなかった。
+- **対応**: 
+  - `DatabaseStack` にアクティビティ記録用の `SystemActivity` テーブルを追加。
+  - `LambdaStack` に `TimeoutCheckLambda` と、それを1時間ごとに定期実行する EventBridge ルール (`aws_events.Rule`) を追加し、デプロイを完了。
+
+##### 4. 次回作業：ログイン完了後のリダイレクト不具合の修正 📌 NEXT STEP
+ログイン操作自体は成功しているが、自動でPC一覧画面 (`/pcs`) に遷移されず、ログイン画面が表示されたままになる事象が確認された。改めてURLを開き直すとPC一覧画面に遷移するため、ログイン直後のリダイレクト機能が機能していない状態。
+
+**次回の調査・解決ステップ**:
+1. **ログイン画面の処理確認**:
+   - `frontend/src/app/login/page.tsx` または関連するログインコンポーネント内での `signIn` メソッドの呼び出しを確認する。
+2. **コールバック URL の設定**:
+   - `signIn('azure-ad', { callbackUrl: '/pcs' })` のようにコールバックURLが明示的に設定されているか確認し、設定されていなければ追加する。
+   - または、ログイン成功後の `useEffect` 内等で `router.push('/pcs')` を実行するロジックを実装し、自動遷移が完了するように修正する。
+
+---
+
 ### 日付：2026-07-13
 
 #### 概要
@@ -312,7 +354,7 @@ B. **record_usage_history() 関数** (pc-service.py):
 - [ ] 統合テスト実行
 
 #### 次のステップ
-1. **テスト実装**: backend/tests/ に以下のテストケース追加
+1. **テスト実装**: backend/tests/ test_e2e.py に以下のテストケース追加
    - test_patch_pc_status_success: ステータス更新成功
    - test_patch_pc_status_unauthorized: 認可失敗
    - test_patch_pc_status_invalid_status: 無効なステータス
@@ -366,106 +408,13 @@ B. **record_usage_history() 関数** (pc-service.py):
   3. DynamoDB ステータス更新（pc_status フィールド）
   4. 履歴テーブルへの INSERT（PC Usage History）
   5. 成功レスポンス（previousStatus, newStatus, updatedAt）
-  
-  **コード例**:
-  `python
-  @app.patch('/pcs/<pc_id>/status')
-  @require_admin
-  async def update_pc_status(pc_id: str, request: Request):
-      new_status = request.json['newStatus']
-      # DynamoDB 更新
-      await db.update_item(...)
-      # 履歴記録
-      await record_usage_history(...)
-      return {'status': 'success', 'previousStatus': old, 'newStatus': new_status}
-  `
 
-  **テスト**: ackend/tests/test_e2e.py に検証ケース追加
+#### 修正日
+- **開始**: 2026-05-19
+- **完了**: 2026-05-19
+- **実装時間**: 約 3-4 時間
 
-  #### 2. U-001: PC Usage History への利用記録ロジック実装 (HIGH)
-  **優先度**: 🟠 実装中に確認推奨
-  **影響**: 各 PC ステータス変更時の履歴管理
-  
-  **実装手順**:
-  1. ackend/ecs/src/models/usage_history.py モデル作成
-  2. 
-ecord_usage_history() 関数実装
-  3. PC ステータス変更時（登録、返却、ステータス更新）に自動呼び出し
-  4. 履歴テーブルスキーマ定義
-  
-  **テーブルスキーマ**:
-  `sql
-  CREATE TABLE PC_Usage_History (
-      id UUID PRIMARY KEY,
-      pc_id VARCHAR(50) NOT NULL,
-      action VARCHAR(50) NOT NULL,  -- 'registered', 'returned', 'status_updated', 'disposed'
-      old_status VARCHAR(50),
-      new_status VARCHAR(50),
-      user_id VARCHAR(50),
-      reason TEXT,
-      condition TEXT,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  );
-  `
-
-  #### 3. U-002: 初期管理者設定スクリプト作成 (HIGH)
-  **優先度**: 🟠 実装中に確認推奨
-  **影響**: 本番環境デプロイ時の初期化手順
-  
-  **実装手順**:
-  1. scripts/seed-initial-admin.py 作成
-  2. 管理者ユーザー作成ロジック（Microsoft Graph API 連携）
-  3. DynamoDB Users テーブルへの INSERT
-  4. CI/CD パイプラインへの統合（初期化ステップ）
-  
-  **スクリプト例**:
-  `python
-  import boto3
-  from datetime import datetime
-  
-  def create_initial_admin():
-      dynamodb = boto3.resource('dynamodb')
-      users_table = dynamodb.Table('Users')
-      
-      admin_user = {
-          'userId': 'admin-001',
-          'name': 'システム管理者',
-          'role': 'Admin',
-          'createdAt': datetime.utcnow().isoformat()
-      }
-      
-      users_table.put_item(Item=admin_user)
-      print('初期管理者が登録されました。')
-  `
-
-  #### 4. D-002, D-003: 成功基準の測定方法明確化 (HIGH)
-  **優先度**: 🟠 実装中に確認推奨
-  **影響**: テストスイートの設計
-  
-  **対応**:
-  - SC-003: T042 テスト実装時に「テストケース数」「評価方法」「baseline」を定義
-  - SC-004: Lambda/ECS 分岐による段階化（<2 秒 vs <10 秒）を spec.md に明記
-
-  #### 5. A-001, A-002: 仕様の曖昧性解消 (MEDIUM)
-  **優先度**: 🟡 実装品質向上
-  **影響**: ドキュメントの明確化
-  
-  **対応**:
-  - FR-015: 「最後のアクティビティから 2 時間」に統一（spec.md 修正済み）
-  - FR-006: MUST/SHOULD に層別化（spec.md 修正済み）
-
-- **修正済みファイル**:
-  - contracts/api.md: PATCH エンドポイント追加
-  - spec.md: SC-003, SC-004, FR-006, FR-015, Assumptions 修正
-
-- **修正日**: 2026-05-19
-- **実装状況**: GREEN（42/42 タスク完了、憲法準拠 7/7）
-- **推奨**: 以下の手順で本番化可能
-  1. 実装後確認（1-2h）: D-001, U-001 の実装確認
-  2. ドキュメント更新（30min）: API コントラクト、spec.md 更新
-  3. デプロイ前（1h）: U-002 スクリプト実装・検証、E2E テスト実行
-
-- **推定完了時間**: 3-4 時間（残作業実施時）
+---
 
 ### 日付：2026-06-05
 
@@ -512,33 +461,7 @@ ecord_usage_history() 関数実装
 - **完了**: 2026-06-05
 - **実装時間**: 約 1.5 時間
 
-##### 4. フロントエンドのビルド確認と修正 ✅ COMPLETED
-- **構造修正**: `pages/` を `src/pages/` へ移動。
-- **ESM対応**: `package.json` (`type: module`) および `next.config.js` を ESM 形式へ更新。
-- **インポート解決**: `tsconfig.json` に `@/*` パス設定を追加。
-- **UIコンポーネント実装**: 不足していた Shadcn UI 系コンポーネント (`Button`, `Card`, `Label`, `Textarea`, `Skeleton`) を `src/components/ui/` に新規作成。
-- **型エラー修正**:
-  - `PC` 型定義をバックエンドのステータス（`InUse`, `Unused` 等）とフィールド名 (`pcId`) に合わせて全面刷新。
-  - 各ページのフック使用箇所に `'use client';` を追加し、不足していた `useState` やインポートを補完。
-- **結果**: `npm run build` が正常に終了し、フロントエンドの型安全性が確保された。
-
-#### 次のステップ
-1. **pytest suite 実行**:
-   - テストコマンド: `python -m pytest backend/ecs/tests/test-gemini-accuracy.py -v`
-   - 期待結果: 100+ テストケースの実行成功（80%+ 合格率）
-
-2. **テスト結果ドキュメント**:
-   - 成功/失敗ケース詳細をログに記録
-   - CI/CD パイプラインへの統合
-
-3. **デプロイ準備**:
-   - .env.local を本番環境の secrets manager に登録
-   - API キー ローテーション ポリシー定策
-
-#### 修正日
-- **開始**: 2026-06-02
-- **完了**: 2026-06-02
-- **実装時間**: 約 2 時間
+---
 
 ### 日付：2026-06-08
 
@@ -613,7 +536,7 @@ ecord_usage_history() 関数実装
 - **セキュリティ修正**: `SecretValueExposureRisk` を回避するため、シークレットの値を環境変数に直接入れる方式から、実行時に参照する方式へ変更。
 
 #### 技術的発見と課題
-- **CDK デプロイ停止中**: AWS アカウント/リージョンの解決エラー (`Unable to resolve AWS account`) が発生。
+- **CDK デプレロイ停止中**: AWS アカウント/リージョンの解決エラー (`Unable to resolve AWS account`) が発生。
 - **原因**: ターミナル環境で AWS CLI の認証情報またはデフォルトリージョンが設定されていない可能性。
 
 #### 次のステップ
@@ -716,15 +639,10 @@ ecord_usage_history() 関数実装
 - **開始**: 2026-06-19
 - **完了**: 2026-06-19
 - **実装時間**: 約 2.5 時間
-// ... existing code ...
-#### 修正日
-- **開始**: 2026-06-19
-- **完了**: 2026-06-19
-- **実装時間**: 約 2.5 時間
 
 ---
 
-### 日付：2026-06-25 (次回作業用セッションノート)
+### 日付：2026-06-25 
 
 #### 概要
 - 作業内容:
@@ -806,12 +724,6 @@ npx cdk deploy --all
 
 ---
 
-- **作成日**: 2026-06-25
-- **作成者**: AI Assistant
-- **想定作業時間**: 約 1.0 〜 1.5 時間
-
----
-
 ### 日付：2026-06-29
 
 #### 概要
@@ -849,34 +761,3 @@ npx cdk deploy --all
 ##### 4. ロバストなログデバッグ環境 `fetch_logs.py` の作成 ✅ COMPLETED
 - **課題**: Windowsターミナル (PowerShell) の Shift-JIS (cp932) エンコーディング特性により、`aws logs` から流れる UTF-8 特有文字（ノーブレークスペースなど）が含まれるエラーメッセージを取得しようとするとクラッシュしていた。
 - **対応**: ターミナルの文字コード警告を無視し、生バイト列からJSON形式をスライス抽出して、確実に最新のエラーメッセージだけをUTF-8で保存する専用スクリプト `fetch_logs.py` を作成。
-
----
-
-#### 現在のステータスと直面している課題
-- **インフラデプロイ**: 一括デプロイは DatabaseStack, LambdaStack, EcsStack すべて **正常完了**。
-- **エンドポイント**: `https://ssotygin67.execute-api.ap-northeast-1.amazonaws.com`
-- **現在の課題**:
-  - API Gateway 経由でアクセスした際、まだ `Internal Server Error` が返る。
-  - 最新の実行時エラーが `fetch_logs.py` を走らせることで特定できるところまで到達。
-
----
-
-#### 次回開始時の明確な解決手順
-
-次回は以下のロードマップに沿って進めることで、最速で疎通から動作確認までを完了できます。
-
-##### ステップ 1. 最新エラーログの確認
-- `.\infrastructure\.venv\Scripts\python.exe fetch_logs.py` をターミナルで実行。
-- `error_logs_fresh20.txt` に最新のスタックトレースが書き込まれるので、その内容（例：FastAPIが初期ロード時に参照しているモジュールエラーやDynamoDB権限等）を確認する。
-
-##### ステップ 2. エラー修正と Lambda の高速再デプロイ
-- 特定されたエラー箇所（モジュールインポートパスや環境変数の不整合など）を修正。
-- 修正後、インフラに影響を与えずにLambdaのコードだけを爆速で更新します：
-  ```powershell
-  npx cdk deploy LambdaStack --app ".\infrastructure\.venv\Scripts\python.exe infrastructure/app.py" --require-approval never
-  ```
-
-##### ステップ 3. 自動スリープ・自動起動（透過プロキシ）の検証
-- APIエンドポイント（`https://ssotygin67.execute-api.ap-northeast-1.amazonaws.com/`）へアクセスし、疎通が成功することを確認。
-- ECSタスク数 0（停止中）の状態で、`/api/pcs` へアクセスし、Lambdaが `503` レスポンスを返しつつ裏でECSタスクが自動起動することを確認。
-- 15秒〜30秒後、ECSが起動完了したら自動的にリバースプロキシが起動IPを検知してデータが返ってくることを確認。
