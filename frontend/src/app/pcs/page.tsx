@@ -4,8 +4,9 @@ import React, { useState, useEffect } from 'react';
 import { PC } from '@/types/pc';
 import Link from 'next/link';
 import { getStatusDisplay, getStatusColor } from '@/lib/utils';
-import { signOut } from 'next-auth/react';
+import { signOut, useSession } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
+import { useRouter } from 'next/navigation';
 
 // 型定義のインポートを想定
 // 実際には、PCのデータ構造に合わせて調整が必要です。
@@ -15,11 +16,21 @@ interface PcsPageProps {
 }
 
 const PcsPage: React.FC<PcsPageProps> = ({ initialPcs = [] }) => {
+  const { data: session, status } = useSession();
+  const router = useRouter();
   const [pcsList, setPcsList] = useState<PC[]>(initialPcs);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/login');
+    }
+  }, [status, router]);
+
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+
     const fetchPcs = async () => {
       setLoading(true);
       try {
@@ -37,10 +48,14 @@ const PcsPage: React.FC<PcsPageProps> = ({ initialPcs = [] }) => {
       }
     };
     fetchPcs();
-  }, []);
+  }, [status]);
 
-  if (loading) {
-    return <div className="p-8 text-center">PC一覧を読み込み中です...</div>;
+  if (status === 'loading' || loading) {
+    return <div className="p-8 text-center">読み込み中です...</div>;
+  }
+
+  if (status === 'unauthenticated') {
+    return null; // リダイレクトされるため何も表示しない
   }
 
   if (error) {
