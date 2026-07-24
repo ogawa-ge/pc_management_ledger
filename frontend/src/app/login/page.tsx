@@ -16,7 +16,7 @@ export default function LoginPage() {
           <CardContent className="pt-4">
             <div className="flex justify-center">
               <Button
-                onClick={() => signIn('azure-ad')}
+                onClick={() => signIn('azure-ad', { callbackUrl: '/pcs' })}
                 className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded w-full"
               >
                 Microsoftアカウントでログイン
