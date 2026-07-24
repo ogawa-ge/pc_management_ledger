@@ -6,20 +6,27 @@
 本番環境デプロイ時の初期化手順として使用されます。
 
 使用方法:
-    python scripts/seed-initial-admin.py --name "管理者名" --email "admin@example.com"
+python scripts/seed-initial-admin.py \
+  --name "管理者名" \
+  --email "admin2@example.com" \
+  --user-id "オブジェクトID" \
+  --region ap-northeast-1 \
+  --force
 """
 
 import boto3
 import argparse
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 
 # DynamoDB リソースの初期化
-def get_dynamodb_resource():
+def get_dynamodb_resource(region_name: Optional[str] = None):
     """DynamoDB リソースを取得"""
-    region = os.getenv('AWS_REGION', 'us-east-1')
+    session = boto3.Session()
+    # コマンドライン引数 > 環境変数 > AWS設定のデフォルトリージョンの順で決定
+    region = region_name or os.getenv('AWS_REGION') or session.region_name or 'ap-northeast-1'
     return boto3.resource('dynamodb', region_name=region)
 
 
@@ -43,7 +50,8 @@ def create_initial_admin(
     name: str,
     email: str,
     user_id: Optional[str] = None,
-    force: bool = False
+    force: bool = False,
+    region: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     初期管理者ユーザーを作成
@@ -53,11 +61,12 @@ def create_initial_admin(
         email: 管理者のメールアドレス
         user_id: ユーザー ID（オプション、指定されない場合は自動生成）
         force: 既存の Admin が存在する場合でも作成するかどうか
+        region: AWSリージョン
     
     Returns:
         作成されたユーザーの情報
     """
-    dynamodb = get_dynamodb_resource()
+    dynamodb = get_dynamodb_resource(region)
     users_table = dynamodb.Table('Users')
     
     # Admin が既に存在するかチェック
@@ -68,7 +77,7 @@ def create_initial_admin(
     
     # user_id が指定されていない場合は自動生成
     if not user_id:
-        user_id = f"admin-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+        user_id = f"admin-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
     
     # Admin ユーザーオブジェクトを作成
     admin_user = {
@@ -76,7 +85,7 @@ def create_initial_admin(
         'name': name,
         'email': email,
         'role': 'Admin',
-        'createdAt': datetime.utcnow().isoformat(),
+        'createdAt': datetime.now(timezone.utc).isoformat(),
         'status': 'active',
         'permissions': [
             'pc:create',
@@ -134,6 +143,10 @@ def main():
         action='store_true',
         help='Force creation even if Admin already exists'
     )
+    parser.add_argument(
+        '--region',
+        help='AWS region (e.g. ap-northeast-1)'
+    )
     
     args = parser.parse_args()
     
@@ -155,7 +168,8 @@ def main():
         name=args.name,
         email=args.email,
         user_id=args.user_id,
-        force=args.force
+        force=args.force,
+        region=args.region
     )
     
     if 'error' in result:
