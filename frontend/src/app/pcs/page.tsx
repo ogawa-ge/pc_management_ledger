@@ -94,12 +94,26 @@ const PcsPage: React.FC<PcsPageProps> = ({ initialPcs = [] }) => {
       </div>
       
       <div className="flex justify-between items-center mb-6">
-        <button
-          onClick={() => alert('CSVダウンロード機能が実装されます (T031)')}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition duration-150"
-        >
-          CSVダウンロード
-        </button>
+        <div className="flex gap-4">
+          <Link href="/pcs/register">
+            <Button className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition duration-150">
+              PC新規登録
+            </Button>
+          </Link>
+          <Link href="/pcs/unused">
+            <Button variant="outline" className="border-blue-600 text-blue-600 hover:bg-blue-50 font-bold py-2 px-4 rounded transition duration-150">
+              未使用PC一覧
+            </Button>
+          </Link>
+          {session?.user && (session.user as any).role === 'Admin' && (
+            <Button
+              onClick={() => alert('CSVダウンロード機能が実装されます (T031)')}
+              className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition duration-150"
+            >
+              CSVダウンロード
+            </Button>
+          )}
+        </div>
         {/* T032でレイアウト調整されることを想定 */}
       </div>
 
