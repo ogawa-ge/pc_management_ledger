@@ -4,7 +4,7 @@ from fastapi import HTTPException, status
 import os
 
 # DynamoDBクライアントの初期化
-from db import dynamodb
+from src.db import dynamodb
 
 # JWTの秘密鍵（実際の運用では環境変数から取得する）
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key")

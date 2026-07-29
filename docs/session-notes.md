@@ -49,7 +49,13 @@
 - **対応**: バックエンドの `backend/lambda/src/main.py` を修正。`/api/auth/user-permissions` から `Depends(security)` 依存関係と JWT デコード処理を削除し、Pydantic モデルを用いた JSON ボディ `{ userId }` を直接解釈する Server-to-Server 向けのエンドポイントへと修正。
 - **効果**: API 連携が 200 OK で正常通信できるようになり、NextAuth のセッション callback が確実にユーザーの権限とロールをロード・マッピングできるようになりました。
 
-##### 6. 次回作業 📌 NEXT STEP
+##### 6. Lambda 実行時のインポートパスエラー (`No module named 'db'`) の修正 ✅ COMPLETED
+- **課題**: 403エラーを修正しボディ解釈エンドポイントにした後、再度テストしたところ、通信が **`500 Internal Server Error`** になる新たな問題が発生。
+- **原因**: CloudWatch ログ (`fetch_logs.py` を実行して、fresh ログを取得) を調査。`backend/lambda/src/services/auth_service.py` 内で、DynamoDB をインポートする部分が `from db import dynamodb` となっていた。しかし、Lambda の実行環境（カレントディレクトリ `/var/task`）において `db.py` は `src/db.py` に存在するため、絶対インポートパスである `from src.db import dynamodb` で指定しないとモジュールが見つからず、実行時例外 `ModuleNotFoundError: No module named 'db'` が発生し、処理がクラッシュしていたことが判明。
+- **対応**: `auth_service.py` 内のインポート指定を `from src.db import dynamodb` に修正。
+- **効果**: Lambda 実行環境における DynamoDB クライアントの読み込みクラッシュが完全に解消され、DynamoDB からの権限およびロールデータの読み出し、返却が正常に行われるようになりました。
+
+##### 7. 次回作業 📌 NEXT STEP
 - 修正を施した LambdaStack のデプロイ完了後、再度ブラウザを一度「ログアウト ＆ 再ログイン」していただき、無事ヘッダーに「管理者 (Admin)」バッジが表示されることをご確認いただく。
 
 ---
