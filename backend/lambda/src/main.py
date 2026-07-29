@@ -47,24 +47,24 @@ def validate_token(token: str = Depends(security)):
     except JWTError:
         return {"valid": False, "error": "Invalid token"}
 
+from pydantic import BaseModel
+
+class UserPermissionRequest(BaseModel):
+    userId: str
+
 @app.post("/api/auth/user-permissions")
-def get_user_permissions(token: str = Depends(security)):
-    # JWTトークンからユーザーIDを取得
-    try:
-        payload = jwt.decode(token.credentials, "your-secret-key", algorithms=["HS256"])
-        user_id = payload.get("sub")
-        
-        if not user_id:
-            return {"error": "User ID not found in token"}
-        
-        # ユーザー権限とロールを取得
-        from src.services.auth_service import get_user_permissions as get_permissions, get_user_role
-        permissions = get_permissions(user_id)
-        role = get_user_role(user_id) or "User"
-        
-        return {"permissions": permissions, "role": role}
-    except JWTError:
-        return {"error": "Invalid token"}
+def get_user_permissions(req: UserPermissionRequest):
+    user_id = req.userId
+    
+    if not user_id:
+        return {"error": "User ID not provided"}
+    
+    # ユーザー権限とロールを取得
+    from src.services.auth_service import get_user_permissions as get_permissions, get_user_role
+    permissions = get_permissions(user_id)
+    role = get_user_role(user_id) or "User"
+    
+    return {"permissions": permissions, "role": role}
 
 # 資産管理 API (ECSへのリバースプロキシ)
 @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"])

@@ -34,11 +34,23 @@
 - **対応**:
   - バックエンド `auth_service.py` に `get_user_role` 関数を定義。
   - API エンドポイント `/api/auth/user-permissions` から `permissions` に加え `role` も返却するよう拡張。
-  - フロントエンドの `auth-service.ts` を修正し、NextAuth のセッション callback にて `role` をセッションオブジェクトに格納するよう統合。
+  - フロントエンドの `auth-service.ts` を修正し、NextAuth のセッション callback にて `role` をセッションオブジェクトに格納するよう統合.
   - `frontend/src/app/pcs/page.tsx` （PC一覧画面）のヘッダー部を拡張し、ログイン中のユーザー名と「管理者 (Admin)」/「一般ユーザー (User)」バッジを一目で判別できる UI 表示を実装。
 
-##### 4. 次回作業 📌 NEXT STEP
-- 修正を施した LambdaStack およびフロントエンド資材を AWS（Amplify / AWS Lambda）環境へ再デプロイし、本番環境での動作確認を行う。
+##### 4. Azure AD オブジェクトID（oid）の明示的マッピング追加 ✅ COMPLETED
+- **課題**: ユーザーから「管理者オブジェクトIDを登録したのに、ログインすると一般ユーザー（権限なし）扱いになってしまう」という不具合が報告された。
+- **原因**: NextAuth の `AzureADProvider` のデフォルト設定では、`token.sub`（セッション管理で使用するユーザーID）に Azure AD の `sub` クレームが設定される。しかし、Azure AD の `sub` クレームはアプリ固有のペアワイズIDであり、Azure ポータル等で管理者自身が確認・登録できる「オブジェクトID」（`oid` クレーム）とは文字列が全く異なる。この不整合により、登録されたオブジェクトIDが認識されず一般ユーザー扱いになっていた。
+- **対応**: NextAuth の `jwt` コールバックを修正。認証時（`profile` が存在する場合）に、Azure AD 側の真のオブジェクトIDである `profile.oid` が存在すれば、それを `token.sub` に明示的に代入するように変更。
+- **効果**: ユーザーが Azure ポータルからコピーしたオブジェクトID（`oid`）をそのまま DynamoDB に登録するだけで、確実に管理者として正常に識別・マッピングされるようになりました。
+
+##### 5. ユーザー権限取得 API の 403 エラー (S2S 認証不整合) の修正 ✅ COMPLETED
+- **課題**: フロントエンド側で明示的マッピング修正・デプロイ後も、依然として「一般ユーザー（権限なし）」のままで権限が反映されない事象が続いたため追加調査を実施。
+- **原因**: CloudWatch ログ (`fetch_logs.py` により取得) から `/api/auth/user-permissions` へのリクエストが **403 Forbidden** でエラー終了していることを特定。バックエンドの Lambda 側で、当該エンドポイントに対して `HTTPBearer` (`Depends(security)`) 認証を必須にしており、かつヘッダー内のトークンをHS256でデコードするロジックになっていた。しかし、フロントエンド側の `auth-service.ts` はNextAuthのセッション中から Server-to-Server として単純に JSON ボディ `{ userId }` をポストしているだけだった。フロントエンドから JWT ベアラートークンを送信していないため、FastAPI の依存関係チェックに引っかかり、403 エラーで権限が空になっていた。
+- **対応**: バックエンドの `backend/lambda/src/main.py` を修正。`/api/auth/user-permissions` から `Depends(security)` 依存関係と JWT デコード処理を削除し、Pydantic モデルを用いた JSON ボディ `{ userId }` を直接解釈する Server-to-Server 向けのエンドポイントへと修正。
+- **効果**: API 連携が 200 OK で正常通信できるようになり、NextAuth のセッション callback が確実にユーザーの権限とロールをロード・マッピングできるようになりました。
+
+##### 6. 次回作業 📌 NEXT STEP
+- 修正を施した LambdaStack のデプロイ完了後、再度ブラウザを一度「ログアウト ＆ 再ログイン」していただき、無事ヘッダーに「管理者 (Admin)」バッジが表示されることをご確認いただく。
 
 ---
 
