@@ -11,10 +11,15 @@ export const authOptions = {
     }),
   ],
   callbacks: {
-    async jwt({ token, account }: any) {
+    async jwt({ token, account, profile }: any) {
       // Access tokenをJWTに追加
       if (account) {
         token.accessToken = account.access_token;
+      }
+      // Azure ADのオブジェクトID (oid) を token.sub (userIdとして使用) に明示的にマッピングする
+      // Azure ADのsubクレームはoidと異なるペアワイズIDの場合があり、ポータル上のオブジェクトID (oid) と一致しません。
+      if (profile && profile.oid) {
+        token.sub = profile.oid;
       }
       return token;
     },
