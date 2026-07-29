@@ -1,5 +1,6 @@
 import json
 import urllib3
+from urllib.parse import urlencode
 from fastapi import FastAPI, Depends, Request, Response
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -96,7 +97,7 @@ async def proxy_to_ecs(path: str, request: Request):
     
     # クエリパラメータの再構築
     query_params = dict(request.query_params)
-    query_string = f"?{urllib3.request.urlencode(query_params)}" if query_params else ""
+    query_string = f"?{urlencode(query_params)}" if query_params else ""
     
     # 転送先 URL
     target_url = f"http://{public_ip}:80/{path}{query_string}"

@@ -3,9 +3,11 @@
 import React, { useState, useEffect } from 'react';
 import TerminalCommand from '@/components/terminal-command';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { getUsers, parseSpecs, registerPC } from '@/services/pc-api';
 
 const PCRegisterPage = () => {
+  const { data: session } = useSession();
   const [pcName, setPcName] = useState('');
   const [os, setOs] = useState('');
   const [cpu, setCpu] = useState('');
@@ -24,15 +26,27 @@ const PCRegisterPage = () => {
         const userList = await getUsers();
         setUsers(userList);
         // デフォルトで最初のユーザーをオーナーとして設定
-        if (userList.length > 0) {
+        if (userList.length > 0 && session?.user && (session.user as any).role === 'Admin') {
           setOwnerId(userList[0].userId);
         }
       } catch (error) {
         console.error('ユーザーリストの取得に失敗しました:', error);
       }
     };
-    fetchUsers();
-  }, []);
+    if (session?.user && (session.user as any).role === 'Admin') {
+      fetchUsers();
+    }
+  }, [session]);
+
+  useEffect(() => {
+    if (session?.user) {
+      if ((session.user as any).role !== 'Admin') {
+        // 一般ユーザーの場合は、自身のユーザーIDをオーナーに設定
+        const selfId = (session.user as any).id || (session.user as any).sub || '';
+        setOwnerId(selfId);
+      }
+    }
+  }, [session]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,6 +95,38 @@ const PCRegisterPage = () => {
           </div>
         ) : (
           <form onSubmit={handleSubmit}>
+            {session?.user && (session.user as any).role === 'Admin' ? (
+              <div className="form-group mb-4">
+                <label htmlFor="ownerId" className="block text-sm font-semibold mb-2">オーナーユーザー（代理登録先） *</label>
+                <select
+                  id="ownerId"
+                  value={ownerId}
+                  onChange={(e) => setOwnerId(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded"
+                  required
+                >
+                  <option value="">ユーザーを選択してください</option>
+                  {users.map((user) => (
+                    <option key={user.userId} value={user.userId}>
+                      {user.name} ({user.email})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              session?.user && (
+                <div className="form-group mb-4">
+                  <label className="block text-sm font-semibold mb-2">オーナーユーザー</label>
+                  <input
+                    type="text"
+                    value={`${session.user.name || ''} (${session.user.email || ''})`}
+                    className="w-full p-2 border border-gray-300 rounded bg-gray-100 cursor-not-allowed"
+                    disabled
+                  />
+                </div>
+              )
+            )}
+
             <div className="form-group">
               <label htmlFor="pcName">PC名 *</label>
               <input
