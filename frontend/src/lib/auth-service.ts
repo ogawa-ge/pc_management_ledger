@@ -7,13 +7,21 @@
  * @param userId - ユーザーID
  * @returns ユーザーの権限の配列
  */
-export async function get_user_permissions(userId: string): Promise<string[]> {
+export interface UserAuthInfo {
+  permissions: string[];
+  role: string;
+}
+
+/**
+ * ユーザーの認証情報（権限、ロール）を取得する
+ * @param userId - ユーザーID
+ * @returns ユーザーの認証情報
+ */
+export async function get_user_auth_info(userId: string): Promise<UserAuthInfo> {
   try {
-    // サーバーサイドでの実行時は絶対パスが必要なため、バックエンドのURLを直接使用
     const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
     const apiUrl = `${baseUrl}/api/auth/user-permissions`;
     
-    // APIエンドポイントからユーザー権限を取得
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
@@ -27,9 +35,22 @@ export async function get_user_permissions(userId: string): Promise<string[]> {
     }
 
     const data = await response.json();
-    return data.permissions || [];
+    return {
+      permissions: data.permissions || [],
+      role: data.role || 'User'
+    };
   } catch (error) {
-    console.error('権限の取得に失敗しました:', error);
-    return [];
+    console.error('ユーザー認証情報の取得に失敗しました:', error);
+    return { permissions: [], role: 'User' };
   }
+}
+
+/**
+ * ユーザーの権限を取得する
+ * @param userId - ユーザーID
+ * @returns ユーザーの権限の配列
+ */
+export async function get_user_permissions(userId: string): Promise<string[]> {
+  const info = await get_user_auth_info(userId);
+  return info.permissions;
 }

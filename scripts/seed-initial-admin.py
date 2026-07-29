@@ -18,8 +18,11 @@ import boto3
 import argparse
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any
+
+# 日本時間 (JST) の定義
+JST = timezone(timedelta(hours=9), 'JST')
 
 # DynamoDB リソースの初期化
 def get_dynamodb_resource(region_name: Optional[str] = None):
@@ -77,7 +80,7 @@ def create_initial_admin(
     
     # user_id が指定されていない場合は自動生成
     if not user_id:
-        user_id = f"admin-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
+        user_id = f"admin-{datetime.now(JST).strftime('%Y%m%d%H%M%S')}"
     
     # Admin ユーザーオブジェクトを作成
     admin_user = {
@@ -85,7 +88,7 @@ def create_initial_admin(
         'name': name,
         'email': email,
         'role': 'Admin',
-        'createdAt': datetime.now(timezone.utc).isoformat(),
+        'createdAt': datetime.now(JST).isoformat(),
         'status': 'active',
         'permissions': [
             'pc:create',

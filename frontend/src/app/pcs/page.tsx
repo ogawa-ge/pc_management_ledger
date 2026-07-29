@@ -65,14 +65,32 @@ const PcsPage: React.FC<PcsPageProps> = ({ initialPcs = [] }) => {
   return (
     <div className="container mx-auto p-6">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">PC管理台帳 - 全PC一覧</h1>
-        <Button 
-          variant="outline" 
-          onClick={() => signOut({ callbackUrl: '/login' })}
-          className="text-red-600 border-red-600 hover:bg-red-50"
-        >
-          ログアウト
-        </Button>
+        <div className="flex items-center gap-4">
+          <h1 className="text-3xl font-bold">PC管理台帳 - 全PC一覧</h1>
+          {session?.user && (
+            <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
+              (session.user as any).role === 'Admin' 
+                ? 'bg-red-100 text-red-800 border border-red-200' 
+                : 'bg-green-100 text-green-800 border border-green-200'
+            }`}>
+              {(session.user as any).role === 'Admin' ? '管理者 (Admin)' : '一般ユーザー (User)'}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-4">
+          {session?.user && (
+            <span className="text-sm text-gray-600">
+              {session.user.name || session.user.email}
+            </span>
+          )}
+          <Button 
+            variant="outline" 
+            onClick={() => signOut({ callbackUrl: '/login' })}
+            className="text-red-600 border-red-600 hover:bg-red-50"
+          >
+            ログアウト
+          </Button>
+        </div>
       </div>
       
       <div className="flex justify-between items-center mb-6">

@@ -31,7 +31,7 @@ def get_user_permissions(user_id: str) -> list:
     try:
         # Usersテーブルからユーザー情報を取得
         table = dynamodb.Table('Users')
-        response = table.get_item(Key={'user_id': user_id})
+        response = table.get_item(Key={'userId': user_id})
         user = response.get('Item')
         
         if not user:
@@ -43,6 +43,23 @@ def get_user_permissions(user_id: str) -> list:
         # エラーが発生した場合はログを出力し、空の権限を返す
         print(f"Error getting user permissions: {e}")
         return []
+
+def get_user_role(user_id: str) -> Optional[str]:
+    """
+    DBからユーザーのロールを取得する
+    """
+    try:
+        table = dynamodb.Table('Users')
+        response = table.get_item(Key={'userId': user_id})
+        user = response.get('Item')
+        
+        if not user:
+            return None
+            
+        return user.get('role', 'User')
+    except Exception as e:
+        print(f"Error getting user role: {e}")
+        return None
 
 def check_permission(user_id: str, required_permission: str) -> bool:
     """

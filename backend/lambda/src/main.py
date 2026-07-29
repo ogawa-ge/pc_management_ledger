@@ -57,11 +57,12 @@ def get_user_permissions(token: str = Depends(security)):
         if not user_id:
             return {"error": "User ID not found in token"}
         
-                # ユーザー権限を取得
-        from src.services.auth_service import get_user_permissions as get_permissions
+        # ユーザー権限とロールを取得
+        from src.services.auth_service import get_user_permissions as get_permissions, get_user_role
         permissions = get_permissions(user_id)
+        role = get_user_role(user_id) or "User"
         
-        return {"permissions": permissions}
+        return {"permissions": permissions, "role": role}
     except JWTError:
         return {"error": "Invalid token"}
 
