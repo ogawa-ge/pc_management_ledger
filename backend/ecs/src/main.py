@@ -4,7 +4,7 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime
 import uuid
 from src.services.gemini_service import parse_specs
-from src.services.pc_service import create_pc, record_usage_history
+from src.services.pc_service import create_pc, record_usage_history, process_pc_return
 from src.models.user import UserRepository
 from src.models.return_record import ReturnRecordRepository
 from src.models.pc import PcRepository, Pc, PcCreateRequest, PcParseRequest, PcReturnRequest
@@ -134,13 +134,17 @@ def get_pcs(status: str = None) -> List[Pc]:
         table = dynamodb.Table('PCs')
         
         if status:
-            # status でフィルタリング
-            filter_expression = "status = :status"
+            # status でフィルタリング (status は予約語のため ExpressionAttributeNames を使用)
+            filter_expression = "#st = :status"
+            expression_attribute_names = {
+                "#st": "status"
+            }
             expression_attribute_values = {
                 ":status": status
             }
             response = table.scan(
                 FilterExpression=filter_expression,
+                ExpressionAttributeNames=expression_attribute_names,
                 ExpressionAttributeValues=expression_attribute_values
             )
         else:
