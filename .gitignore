@@ -1,0 +1,26 @@
+.env.local
+.env
+node_modules/
+dist/
+.DS_Store
+coverage/
+*.log
+__pycache__/
+*.pyc
+.pytest_cache
+*.aws
+.next/
+out/
+.terraform/
+.vscode/
+
+# CDK build outputs
+cdk.out/
+
+# Debug and log outputs
+debug_events.txt
+debug_stream.txt
+error_logs*.txt
+raw_events.json
+log_output.txt
+logs.json

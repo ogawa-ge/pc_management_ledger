@@ -1,0 +1,19 @@
+description = "Perform pre-implementation environment and checklist verification."
+
+prompt = """
+---
+description: Perform pre-implementation environment and checklist verification.
+---
+
+## Outline
+
+1. Run `.specify/scripts/powershell/check-prerequisites.ps1 --json --require-tasks --include-tasks` from repo root and parse FEATURE_DIR and AVAILABLE_DOCS list.
+
+2. **Check checklists status** (if FEATURE_DIR/checklists/ exists):
+   - Scan all checklist files. Count Total, Completed (`- [X]`, `- [x]`), and Incomplete (`- [ ]`) items.
+   - Create a status table.
+   - If ANY checklist is incomplete, display the table, **STOP** and ask: "Some checklists are incomplete. Do you want to proceed with implementation anyway? (yes/no)". Wait for user response.
+   - If ALL checklists are complete, display the table and automatically proceed.
+
+3. Do NOT load `plan.md` or `tasks.md`. Report that the check is complete and prompt the user to run `/speckit.implement-ignores`.
+"""

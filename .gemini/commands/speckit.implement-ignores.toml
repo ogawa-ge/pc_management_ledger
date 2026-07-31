@@ -1,0 +1,18 @@
+description = "Setup project ignore files based on the technical plan."
+
+prompt = """
+---
+description: Setup project ignore files based on the technical plan.
+---
+
+## Outline
+
+1. Load and analyze `plan.md` to identify the tech stack, architecture, and file structure. (Do not load tasks.md).
+
+2. **Project Setup Verification**:
+   - Create/verify ignore files based on actual project setup (e.g., `.gitignore`, `.dockerignore`, `.eslintignore`, `.prettierignore`, `.terraformignore` etc.) based on the technology detected in `plan.md` and repository state.
+   - Append missing critical patterns only if the file exists. Create with full pattern set if missing.
+   - Common patterns: `node_modules/`, `dist/`, `build/`, `.env*`, `coverage/`, `*.log`, `__pycache__/`, `.venv/`, `target/`, `bin/`, `obj/`, etc.
+
+3. Report that the ignore files are set up, and prompt the user to execute specific tasks using `/speckit.implement-task <TaskID>`.
+"""
