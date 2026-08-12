@@ -1,7 +1,15 @@
 {
-  "integration": "gemini",
-  "version": "0.6.3.dev0",
-  "scripts": {
-    "update-context": ".specify/integrations/gemini/scripts/update-context.ps1"
-  }
+  "version": "0.16.3.dev0",
+  "integration_state_schema": 1,
+  "installed_integrations": [
+    "cline"
+  ],
+  "integration_settings": {
+    "cline": {
+      "script": "ps",
+      "invoke_separator": "-"
+    }
+  },
+  "integration": "cline",
+  "default_integration": "cline"
 }
