@@ -24,3 +24,6 @@ error_logs*.txt
 raw_events.json
 log_output.txt
 logs.json
+
+# Specify CLI local settings
+.specify/init-options.json
