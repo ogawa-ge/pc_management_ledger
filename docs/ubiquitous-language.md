@@ -10,6 +10,10 @@
 | **User** | ユーザー | システムを利用する人物。Microsoftアカウントでログインする。 | `Users` テーブル |
 | **Admin** | 管理者 | システムの全機能（全PCの閲覧、代理登録、廃棄済みへのステータス変更など）を利用できる権限。 | `role` カラムの値 |
 | **General User** | 一般ユーザー | 自身のPCの登録・返却、およびPC一覧の閲覧ができる権限。 | `role` カラムの値 (`User`) |
+| **Owner** | オーナー | PCの所有者として紐付けられるUser。管理者による代理登録では、オーナー候補から明示的に選択する。 | `PC.ownerId` が参照するUser |
+| **Owner ID** | オーナーID | PCとOwnerを紐付けるUserの一意な識別子。画面表示名ではなく、この値を登録APIへ送信する。 | `ownerId` / `User.userId` |
+| **Owner Candidate** | オーナー候補 | 管理者がPCの代理登録時に選択できる、Usersに登録済みのUser。 | `GET /api/users` の返却対象 |
+| **Available User** | 利用可能なユーザー | PC登録時の再確認においてUsersに存在するOwner Candidate。未定義の有効・無効属性は推測せず、削除済みまたは存在しないUserは含めない。 | Owner検証時のUser存在確認 |
 
 ## 2. PC・デバイス関連 (PC & Device)
 

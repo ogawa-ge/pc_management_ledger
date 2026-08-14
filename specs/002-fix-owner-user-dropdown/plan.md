@@ -5,7 +5,7 @@
 
 ## Summary
 
-`specs/001-pc-management` と同等の Next.js + FastAPI（Lambda/ECS）+ DynamoDB 構成および PC 向け UI 方針を維持する。PC新規登録画面で、管理者が既存の `Users` テーブルのユーザーをオーナーとして選択できる既存導線を完成させる。具体的には、ユーザー一覧の取得状態（取得中・成功・0件・失敗）をUIで表現し、取得完了かつ有効なユーザー選択済みの場合だけ登録を可能にする。登録APIでも選択された `ownerId` が `Users` に存在することと管理者権限を検証し、既存のスペック解析・管理番号採番・PC保存の挙動は変更しない。
+`specs/001-pc-management` と同等の Next.js + FastAPI（Lambda/ECS）+ DynamoDB 構成および PC 向け UI 方針を維持する。PC新規登録画面で、管理者が既存の `Users` テーブルのユーザーをオーナーとして選択できる既存導線を完成させる。具体的には、ユーザー一覧の取得状態（取得中・成功・0件・失敗）をUIで表現し、取得完了かつ有効なユーザー選択済みの場合だけ登録を可能にする。登録APIでは、管理者にUsersに存在する任意の `ownerId` を許可し、一般ユーザーには認証主体本人の `ownerId` だけを許可する。既存のスペック解析・管理番号採番・PC保存の挙動は変更しない。
 
 ## Technical Context
 
@@ -15,9 +15,9 @@
 **Testing**: 既存 pytest、TypeScript/Next.js build、API契約確認。Frontend のテストランナーは未導入のため、今回の計画では既存 build と手動確認を基線とする
 **Target Platform**: AWS Amplify/Next.js、AWS Lambda、Amazon ECS、Windows PC向けブラウザ
 **Project Type**: Web Application（Frontend + Serverless/Container Hybrid Backend）
-**Performance Goals**: 通常通信でユーザー一覧を30秒以内に操作可能、取得中は明示的な待機表示、ECS起動時は既存の loading 方針を維持
+**Performance Goals**: 20〜30件のUsersを用い、ECS APIがreadyで人工的な通信遅延を設定していない受け入れ環境で、ブラウザの `GET /api/users` 開始からユーザー選択欄が操作可能になるまでを3回計測し、全回30秒以内。ECSのcold startは計測対象外とし、起動時は既存の loading 方針を維持
 **Constraints**: 既存の AWS コスト最適化、ALB非利用方針、既存PC登録機能を壊さないこと。実データ・秘密鍵は成果物に含めない
-**Scale/Scope**: 20〜30名程度の既存ユーザー、PC新規登録画面と関連 API の限定修正
+**Scale/Scope**: 通常運用は20〜30名程度の既存ユーザー。DynamoDB scan が複数ページになる場合も全ページを取得し、PC新規登録画面と関連 API の限定修正とする
 
 ## Constitution Check
 
@@ -27,7 +27,7 @@
 - [x] `001-pc-management` の `data-model.md` / `contracts/api.md` を一次ソースとし、Users/PCs の新規スキーマを推測しない。
 - [x] 認証・認可は既存の Admin/User 方針に従い、ownerId の受信値だけで権限を信頼しない。
 - [x] Lambda/ECS の責任分担、ECS のコスト最適化、PC向け UI 方針を維持する。
-- [x] ファイル名は既存構造に合わせ、追加時も kebab-case とする。
+- [x] 一般のファイル名はkebab-case、PythonモジュールとPythonテストはsnake_case、フレームワーク予約名は各ツール規約に従う。
 - [x] Gemini API、スペック入力、管理番号採番、返却処理は本修正の対象外として回帰させない。
 
 **判定**: PASS（Phase 0 開始可）。Phase 1 後も新規テーブル・新規外部依存・既存責務の逸脱がないことを再確認する。
@@ -56,14 +56,14 @@
 
 #### Step 1.1: Users一覧 API の契約・認可を整理
 - **目的**: 管理者だけが代理登録候補を取得でき、失敗を空配列と区別する。
-- **作業内容**: ECS の `GET /api/users` に既存認証/管理者判定を適用する。DynamoDB scan のページング要否、エラー時 HTTP status/body、0件時の正常レスポンスを固定する。Lambda プロキシは既存の転送動作を維持する。
+- **作業内容**: ECS の `GET /api/users` に既存認証/管理者判定を適用する。DynamoDB scan は `LastEvaluatedKey` がなくなるまで全ページを取得し、userIdで重複を排除する。エラー時 HTTP status/body、0件時の正常レスポンスを固定する。Lambda プロキシは既存の転送動作を維持する。
 - **Done条件**: 管理者は `User[]` を取得でき、非管理者/未認証は拒否され、取得失敗は非2xxでクライアントが判別できる。
 - **影響ファイル案**: `backend/ecs/src/main.py`、`backend/ecs/src/models/user.py`、`backend/tests/test_e2e.py` または `backend/ecs/tests/` のAPIテスト、`specs/002-fix-owner-user-dropdown/contracts/api.md`
 
 #### Step 1.2: PC登録APIの owner 検証
-- **目的**: UIを迂回した不正な ownerId や無効化済みユーザーへの紐付けを防ぐ。
-- **作業内容**: `POST /api/pcs` の登録前に Users の存在・利用可能性・実行者の Admin 権限を検証する。既存のPC登録リクエスト、スペック解析、採番、保存処理は変更しない。検証失敗時は明示的な4xxとする。
-- **Done条件**: 有効なユーザーだけ登録可能で、owner未指定・不存在・取得失敗・権限不足ではPCが保存されない。
+- **目的**: UIを迂回した不正な ownerId やUsersから削除済みのユーザーへの紐付けを防ぐ。
+- **作業内容**: `POST /api/pcs` の登録前に Users の存在と実行者の権限を検証する。AdminはUsersに存在する任意のオーナー候補を指定でき、一般ユーザーは認証主体本人と一致する `ownerId` だけを指定できる。「利用可能なユーザー」は登録時点でUsersに存在するオーナー候補とし、未定義の有効・無効属性は追加しない。既存のPC登録リクエスト、スペック解析、採番、保存処理は変更しない。検証失敗時は明示的な4xxとする。
+- **Done条件**: Adminによる代理登録と一般ユーザー本人の登録が成功し、owner未指定・不存在・一般ユーザーによる他ユーザー指定・取得失敗ではPCが保存されない。
 - **影響ファイル案**: `backend/ecs/src/main.py`、`backend/ecs/src/services/pc_service.py`、`backend/ecs/src/models/user.py`、`backend/tests/test_e2e.py`、`specs/002-fix-owner-user-dropdown/contracts/api.md`
 
 ### M2: PC登録UIの状態表現と選択制御
@@ -76,7 +76,7 @@
 
 #### Step 2.2: 管理者向けドロップダウンの状態UI
 - **目的**: 空欄表示による誤登録を防ぎ、取得状態を理解可能にする。
-- **作業内容**: `page.tsx` に `loading/error/empty/ready` 状態を追加。取得中は select を無効化し「取得中」を表示、失敗はエラー文と再試行導線を表示、0件は「登録済みユーザーなし」を表示。ready 時のみ選択を許可する。`001-pc-management` と同等の PC向けフォーム構造・ラベル・既存スペック入力UIを維持する。
+- **作業内容**: `page.tsx` に `loading/error/empty/ready` 状態を追加。取得中は select を無効化し「取得中」を表示、失敗はエラー文と再試行ボタンを表示して再取得できるようにし、0件は「登録済みユーザーなし」を表示する。ready 時のみ選択を許可する。`001-pc-management` と同等の PC向けフォーム構造・ラベル・既存スペック入力UIを維持する。
 - **Done条件**: FR-001〜FR-007 のUI条件を満たし、owner未確認時に submit が無効または処理停止する。一般ユーザーには従来どおり自身の owner 表示のみで他ユーザー選択UIを出さない。
 - **影響ファイル案**: `frontend/src/app/pcs/register/page.tsx`、必要時 `frontend/src/app/globals.css`
 
@@ -90,7 +90,7 @@
 
 #### Step 3.2: 自動検証と回帰確認
 - **目的**: 既存機能を維持したまま今回の条件を検証する。
-- **作業内容**: APIの成功/0件/失敗/権限不足/owner不存在、UI状態、既存PC登録・スペック解析・型チェックを確認する。Frontendテスト基盤を新設するかは未決事項として、当面は既存の `npm run build` と pytest を実行する。
+- **作業内容**: APIの成功/0件/失敗/権限不足/owner不存在/複数ページ取得、UI状態、既存PC登録・スペック解析・型チェックを確認する。20〜30件のUsersを用い、ECS APIがreadyかつ人工遅延なしの状態で、ブラウザの `GET /api/users` 開始からselectが操作可能になるまでを3回計測して全回30秒以内であることを確認する。Frontendテスト基盤は今回新設せず、既存の `npm run build`、API pytest、`quickstart.md` の手動確認を実行する。
 - **Done条件**: 自動検証が成功し、対象外機能に差分がないことを確認できる。
 - **影響ファイル案**: `backend/tests/test_e2e.py`、`backend/ecs/tests/`、必要時 `frontend/src/...`、`specs/002-fix-owner-user-dropdown/quickstart.md`
 
@@ -119,24 +119,26 @@
 - [ ] Users に2名以上ある状態で、管理者が `/pcs/register` を開くと全ユーザーが重複なく表示される。
 - [ ] ユーザー名または email が欠落するデータでも、userId等の代替表示で識別できる。
 - [ ] ユーザー取得中は「取得中」が表示され、select と登録操作ができない。
-- [ ] ユーザー取得失敗時は明示的なエラーが表示され、空のselectだけにならず、登録できない。
+- [ ] ユーザー取得失敗時は明示的なエラーと再試行ボタンが表示され、空のselectだけにならず、登録できない。再試行が成功した場合は候補を選択できる。
 - [ ] Users が0件の場合は「登録済みユーザーなし」が表示され、登録できない。
 - [ ] 管理者が任意の1名を選ぶと、選択内容が表示され、登録ボタンが利用可能になる。
 - [ ] 選択後にPC登録を完了すると、登録されたPCの `ownerId` が選択ユーザーの `userId` と一致する。
 - [ ] 登録中は二重送信できず、成功時だけ既存どおりPC一覧へ遷移する。
-- [ ] 登録前に選択ユーザーが無効/削除された場合、登録は拒否されPCが作成されない。
+- [ ] 登録前に選択ユーザーがUsersから削除された場合、登録は拒否されPCが作成されない。
 - [ ] 一般ユーザーには他ユーザーを選ぶselectが表示されず、自身の表示だけになる。
-- [ ] 既存のPC種別、スペック入力、ターミナルコマンド、Gemini解析、管理番号採番に回帰がない。
+- [ ] 20〜30件のUsers、ECS API ready、人工遅延なしの条件で、ブラウザのNetwork記録により `GET /api/users` の開始からselectが操作可能になるまでを3回計測し、全回30秒以内である。
+- [ ] DynamoDB scanが複数ページになるデータで、全ユーザーがuserIdの重複なく表示される。
+- [ ] Notebook/DesktopのPC種別、スペック入力、ターミナルボタンとコマンドコピー、Gemini解析、N-/D-管理番号採番、`001-pc-management` 準拠のPC保存形式、登録中の二重送信防止、成功後の `/pcs` 遷移に回帰がない。
 - [ ] PC向けレイアウト・既存フォームのラベル/操作感を維持し、モバイル専用UIを追加していない。
 
 ## 5) リスク/未決事項（決めるべき順番つき）
 
 1. **認証トークンから実行者を特定する方式**: 現在ECS側に簡易トークン処理の記述があるため、既存認証契約に沿ったAdmin判定方式を最初に確定する。
-2. **Usersの利用可能性フィールド**: `001-pc-management` の一次モデルには有効/無効フィールドがない。削除・無効化の判定を既存データでどう表すか決めるまで、新しい属性を推測して実装しない。
-3. **DynamoDB scan のページング**: ユーザー数が増えた場合のLastEvaluatedKey処理を、今回対応するか次回に分離するか決める。
+2. **Usersの利用可能性**: `001-pc-management` の一次モデルには有効/無効フィールドがないため、今回は登録時点でUsersに存在することを利用可能条件とし、新しい属性を推測して実装しない。
+3. **DynamoDB scan のページング**: `LastEvaluatedKey` がなくなるまで全ページを取得し、userIdで重複を排除する。
 4. **APIのJSON命名**: 既存のPydanticモデル、APIレスポンス、Frontend型で snake_case/camelCase が混在しているため、今回の境界での正規形と変換方針を固定する。
-5. **Frontend自動テスト基盤**: 現在 `npm test` は未設定。Jest等を追加するか、今回のスコープではbuild + API pytest + 手動確認に限定するか決める。
-6. **取得失敗時の再試行UI**: 最低限メッセージと登録抑止を必須とし、再試行ボタンを今回必須にするかを決める。
+5. **Frontend自動テスト基盤（決定済み）**: 現在 `npm test` は未設定であり、Issue #7 の限定修正で新規依存を増やさないため、今回は `npm run build` + API pytest + `quickstart.md` の手動確認に限定する。Frontendテストランナーの導入は別Issueで扱う。
+6. **取得失敗時の再試行UI**: エラーメッセージ、登録抑止、再試行ボタンを今回の必須範囲とする。
 7. **既存検証環境の修復**: `npm run build` は既存の `.next/dev/types/validator.ts` に存在しない `src/pages/index.js` 参照があり、`pytest -q` は既存テストの import path により `No module named 'backend'` で収集失敗した。実装着手前に環境起因か既存不具合かを切り分け、修正範囲を合意する。
 
 ## Project Structure

@@ -22,7 +22,7 @@
   ```json
   {"ownerId":"string","specsText":"string","pcType":"N | D"}
   ```
-- **Server validation**: 実行者がAdminであること、`ownerId` がUsersに存在し利用可能であることを確認。失敗時は4xxで返し、PCを保存しない。
+- **Server validation**: `ownerId` がUsersに存在し利用可能であることを確認する。Adminは任意の利用可能な `ownerId` を指定できる。一般ユーザーは認証主体本人の `userId` と一致する `ownerId` だけを指定でき、他ユーザー指定は4xxで拒否する。未認証、owner未指定、owner不存在、権限不一致、Users再確認失敗ではPCを保存しない。
 - **成功**: 既存 `/api/pcs` のPCレスポンス形式を維持する。少なくとも登録結果の `pcId` と `ownerId` が選択値と一致する。
 - **既存動作**: `specsText` の解析、`N-XXX`/`D-XXX` 採番、PC保存は `001-pc-management/contracts/api.md` に従う。
 
