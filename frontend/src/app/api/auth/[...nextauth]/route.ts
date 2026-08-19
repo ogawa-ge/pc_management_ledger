@@ -32,6 +32,7 @@ export const authOptions = {
           const authInfo = await get_user_auth_info(token.sub);
           session.user = {
             ...session.user,
+            id: token.sub,
             permissions: authInfo.permissions,
             role: authInfo.role,
           };

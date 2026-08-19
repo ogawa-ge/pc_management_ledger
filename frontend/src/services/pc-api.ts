@@ -1,5 +1,28 @@
 // PC関連のAPI呼び出しを処理するサービス
 import { PC } from '@/types/pc';
+import { User } from '@/types/user';
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly detail?: string,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+const throwApiError = async (response: Response): Promise<never> => {
+  let detail: string | undefined;
+  try {
+    const body = await response.json();
+    detail = typeof body.detail === 'string' ? body.detail : undefined;
+  } catch {
+    detail = undefined;
+  }
+  throw new ApiError(detail || `HTTP error! status: ${response.status}`, response.status, detail);
+};
 
 // PCスペック解析
 export const parseSpecs = async (specsText: string) => {
@@ -25,18 +48,19 @@ export const parseSpecs = async (specsText: string) => {
 };
 
 // PC登録
-export const registerPC = async (ownerId: string, specsText: string, pcType: string = "N") => {
+export const registerPC = async (ownerId: string, specsText: string, pcType: string = "N", userId?: string) => {
   try {
     const response = await fetch('/api/pcs', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...(userId ? { Authorization: `Bearer ${userId}` } : {}),
       },
       body: JSON.stringify({ ownerId, specsText, pcType }),
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      await throwApiError(response);
     }
 
     const result = await response.json();
@@ -70,20 +94,21 @@ export const getPCs = async () => {
 };
 
 // ユーザー一覧取得
-export const getUsers = async () => {
+export const getUsers = async (userId: string): Promise<User[]> => {
   try {
     const response = await fetch('/api/users', {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
+        Authorization: `Bearer ${userId}`,
       },
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      await throwApiError(response);
     }
 
-    const result = await response.json();
+    const result: User[] = await response.json();
     return result;
   } catch (error) {
     console.error('ユーザー一覧取得エラー:', error);

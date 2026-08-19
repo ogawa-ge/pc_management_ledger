@@ -31,3 +31,15 @@
 - Backend依存: 既存FastAPI/boto3/Pydanticを利用し、新規サービス基盤は追加しない。
 - Storage: 既存 `Users` と `PCs` のみ。新規テーブル・属性は未定義として扱う。
 - Test: Backendは既存pytest、Frontendは既存buildと手動確認を基線とする。自動UIテスト導入は未決事項として計画に残す。
+
+## Decision: 既存の認証主体転送契約を補完する
+
+- **確認結果**: NextAuth は Azure AD の `oid` を JWT の `sub` に設定し、session に access token と Users から取得した role を保持する。ブラウザの既存 API クライアントは Authorization を付与していなかった。Next.js rewrite はリクエストを Lambda へ転送し、Lambda プロキシは Host を除くヘッダーと ECS の status/body を変更せず転送する。ECS の既存コードは `Authorization: Bearer <userId>` の資格情報を userId として Users に照合する簡易契約であり、JWT 検証は未実装である。
+- **Decision**: 今回はアーキテクチャ境界を変更せず、NextAuth の `sub` を session の user ID としてクライアントへ公開し、PC/Users API 呼び出しで `Authorization: Bearer <userId>` を送る。ECS は受信値の role を信頼せず、毎回 Users の存在と role を再確認して主体を解決する。ownerId は別途 Users に再照合する。
+- **Scope**: Azure access token/JWT の完全検証への置換は、既存認証基盤全体に影響するため本Issueの対象外とする。現行の簡易トークン契約を文書化し、受信した ownerId やクライアント側 role だけで認可しない。
+
+## Decision: 利用可能性は Users の登録時存在で判定する
+
+- **確認結果**: Users を削除する実装済み API や運用コードは存在せず、Lambda の UserRepository に未実装の削除 stub があるだけである。一次モデルにも `isActive` 等の属性はない。
+- **Decision**: 「利用可能なユーザー」は PC 登録時点で Users に存在する Owner Candidate とする。一覧取得後に削除された場合も登録直前の存在確認で拒否する。
+- **用語**: `docs/ubiquitous-language.md` に Owner、Owner ID、Owner Candidate、Available User が定義済みであることを確認した。

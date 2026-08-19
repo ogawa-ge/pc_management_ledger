@@ -12,6 +12,7 @@ from src.models.user import User
 from src.db import dynamodb
 from dotenv import load_dotenv
 import os
+from pydantic import BaseModel
 
 # .env.local を読み込む
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "../../../.env.local"))
@@ -31,6 +32,46 @@ app.add_middleware(
 
 
 # ========== RBAC Helper Functions ==========
+class RequestPrincipal(BaseModel):
+    user_id: str
+    role: str
+
+
+def get_user_repository() -> UserRepository:
+    return UserRepository()
+
+
+def get_request_principal(
+    request: Request,
+    user_repository: UserRepository = Depends(get_user_repository),
+) -> RequestPrincipal:
+    authorization = request.headers.get("Authorization")
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Authorization header required")
+
+    scheme, separator, user_id = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not separator or not user_id.strip() or " " in user_id.strip():
+        raise HTTPException(status_code=401, detail="Invalid authorization header")
+
+    try:
+        user = user_repository.get_user_by_id(user_id.strip())
+    except Exception as error:
+        raise HTTPException(status_code=503, detail="Failed to resolve authenticated user") from error
+
+    if user is None:
+        raise HTTPException(status_code=401, detail="Authenticated user not found")
+
+    return RequestPrincipal(user_id=user.user_id, role=user.role)
+
+
+def get_admin_principal(
+    principal: RequestPrincipal = Depends(get_request_principal),
+) -> RequestPrincipal:
+    if principal.role != "Admin":
+        raise HTTPException(status_code=403, detail="Admin permission required")
+    return principal
+
+
 async def get_user_role(user_id: str) -> Optional[str]:
     """
     DynamoDB から user_id のロールを取得
@@ -98,29 +139,47 @@ def parse_specs_endpoint(request: PcParseRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"Failed to parse specs: {str(e)}")
 
 @app.post("/api/pcs", response_model=Pc)
-def create_pc_endpoint(request: PcCreateRequest) -> Pc:
+def create_pc_endpoint(
+    request: PcCreateRequest,
+    principal: RequestPrincipal = Depends(get_request_principal),
+    user_repository: UserRepository = Depends(get_user_repository),
+) -> Pc:
     """
     新しい PC を登録する
     """
     try:
+        if principal.role != "Admin" and request.owner_id != principal.user_id:
+            raise HTTPException(status_code=403, detail="Cannot register a PC for another user")
+
+        try:
+            owner = user_repository.get_user_by_id(request.owner_id)
+        except Exception as error:
+            raise HTTPException(status_code=503, detail="Failed to verify owner") from error
+
+        if owner is None:
+            raise HTTPException(status_code=404, detail="Owner not found")
+
         result_dict = create_pc(request.owner_id, request.specs_text, request.pc_type)
         return Pc(**result_dict)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create PC: {str(e)}")
 
 @app.get("/api/users", response_model=List[User])
-def get_users() -> List[User]:
+def get_users(
+    _principal: RequestPrincipal = Depends(get_admin_principal),
+    user_repository: UserRepository = Depends(get_user_repository),
+) -> List[User]:
     """
     全てのユーザーを取得する
     """
     try:
-        # Users テーブルから全ユーザーを取得
-        table = dynamodb.Table('Users')
-        response = table.scan()
-        users_data = response.get('Items', [])
-        return [User(**item) for item in users_data]
+        return user_repository.get_all_users()
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get users: {str(e)}")
+        raise HTTPException(status_code=503, detail="Failed to get users") from e
 
 @app.get("/api/pcs", response_model=List[Pc])
 def get_pcs(status: str = None) -> List[Pc]:
