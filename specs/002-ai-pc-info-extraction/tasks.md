@@ -34,8 +34,7 @@ Webアプリケーション構成（001-pc-managementと同一）: `frontend/src
 - [ ] T005 `backend/ecs/src/models/pc.py` を更新する: `Pc.model` を `Optional[str] = None` に緩和し、`PcCreateRequest` を `specs_text` ではなく構造化フィールド（`cpu, memory, storage, os, manufacturer, model`）を受け取る形に変更する（[data-model.md](./data-model.md) 参照）
 - [ ] T006 `backend/ecs/src/services/pc_service.py` の `create_pc()` を更新し、内部で `parse_specs()` を再実行せず、渡された構造化フィールドをそのまま `Pc` に永続化するようにする（依存: T005）
 - [ ] T007 `backend/ecs/src/main.py` の `POST /api/pcs` と `POST /api/pcs/parse-specs` ハンドラを [contracts/api.md](./contracts/api.md) の定義に合わせて更新する（依存: T005, T006）
-- [ ] T008 [P] `backend/ecs/tests/test-gemini-accuracy.py` に、manufacturer/model抽出、リトライ、機微データ除外のテストケースを追加する（依存: T002-T004）
-- [ ] T009 [P] `docs/ubiquitous-language.md` に新用語（「貼り付け入力」「抽出リトライ」）を追加する
+- [ ] T008 `backend/ecs/tests/test-gemini-accuracy.py` に、manufacturer/model抽出、リトライ、機微データ除外のテストケースを追加する（依存: T002-T004）
 
 **Checkpoint**: バックエンドの抽出・登録APIが新しい契約（[contracts/api.md](./contracts/api.md)）で動作する状態
 
@@ -52,7 +51,7 @@ Webアプリケーション構成（001-pc-managementと同一）: `frontend/src
 - [ ] T010 [US1] `frontend/src/services/pc-api.ts` の `parseSpecs()`/`registerPC()` を [contracts/api.md](./contracts/api.md) に合わせて構造化フィールドの送受信に書き換える（依存: Phase 2完了）
 - [ ] T011 [P] [US1] `frontend/src/app/pcs/register/page.tsx` に「ターミナル実行結果を貼り付けてください」のラベル付き`<textarea>`（state: `terminalOutput`）を追加する
 - [ ] T012 [US1] `frontend/src/app/pcs/register/page.tsx` の `handleSubmit` 内、`parseSpecs(terminalCommand)` を `parseSpecs(terminalOutput)` に修正する（依存: T010, T011）
-- [ ] T013 [US1] `frontend/src/app/pcs/register/page.tsx` に `manufacturer`/`model` の入力欄を追加し、Specs定義に存在しない `gpu` 欄を削除する（依存: T011）
+- [ ] T013 [US1] `frontend/src/app/pcs/register/page.tsx` に `manufacturer`/`model` の入力欄を追加する（`gpu`欄はissue #9のスコープ外のため変更しない、依存: T011）
 - [ ] T014 [US1] `frontend/src/app/pcs/register/page.tsx` で、`parseSpecs()` のレスポンスを `cpu/memory/storage/os/manufacturer/model` の各state（`setCpu`等）に反映する（依存: T012, T013）
 - [ ] T015 [US1] `frontend/src/app/pcs/register/page.tsx` に、貼り付け内容の送信前JSONバリデーションを追加し、不正な場合はAPIを呼ばずエラーメッセージを表示する（FR-006, 依存: T012）
 - [ ] T016 [US1] `frontend/src/app/pcs/register/page.tsx` に抽出中のローディング表示（`aria-busy`）と、`retriesExhausted`受信時のエラー表示（貼り付け内容は保持したまま）を追加する（FR-007のUI側, 依存: T014）
@@ -70,7 +69,7 @@ Webアプリケーション構成（001-pc-managementと同一）: `frontend/src
 ### Implementation for User Story 2
 
 - [ ] T017 [US2] `frontend/src/app/pcs/register/page.tsx` の `handleSubmit` を修正し、`parseSpecs()` の戻り値をそのまま送信するのではなく、フォームstate（編集後の値を含む）から構築したオブジェクトを `registerPC()` に渡すようにする（依存: T010, T014）
-- [ ] T018 [US2] `frontend/src/app/pcs/register/page.tsx` に、送信前に必須項目（例: `model`が空欄）を警告するクライアント側バリデーションを追加する（依存: T017）
+- [ ] T018 [US2] `frontend/src/app/pcs/register/page.tsx` に、送信前に必須項目（例: `model`が空欄）を警告するクライアント側バリデーションを追加する（FR-009, 依存: T017）
 
 **Checkpoint**: User Story 1・2ともに独立して動作・検証可能（[quickstart.md](./quickstart.md) シナリオ1）
 
@@ -81,8 +80,8 @@ Webアプリケーション構成（001-pc-managementと同一）: `frontend/src
 **Purpose**: 全体検証と回帰確認
 
 - [ ] T019 [P] [quickstart.md](./quickstart.md) のシナリオ1〜4を実機（Windows 11 / PowerShell）で実行し、結果を記録する
-- [ ] T020 [P] `frontend/src/app/pcs/register/page.tsx` について、[quickstart.md](./quickstart.md) のa11yチェックリスト（label関連付け、Tab順序、`aria-live`、`aria-busy`、色以外でのエラー表現）を確認する
-- [ ] T021 001-pc-managementの管理者代理登録画面（US3）が本機能の影響を受けず従来通り動作することを確認する（回帰確認、[quickstart.md](./quickstart.md) 参照）
+- [ ] T020 [P] `frontend/src/app/pcs/register/page.tsx` について、[quickstart.md](./quickstart.md) のa11yチェックリスト（label関連付け、Tab順序、`aria-live`、`aria-busy`、色以外でのエラー表現）を確認する（FR-010）
+- [ ] T021 001-pc-managementの管理者代理登録画面（US3、`register/page.tsx`を一般ユーザー自己登録と共用）で、管理者としてログインした状態でも貼り付け入力欄・AI自動抽出・手動編集が同様に動作することを確認する（[quickstart.md](./quickstart.md) 参照）
 
 ---
 
@@ -98,25 +97,16 @@ Webアプリケーション構成（001-pc-managementと同一）: `frontend/src
 
 ### Within Each Phase
 
-- Phase 2: T002→T003→T004（同一ファイル、順次）。T005→T006→T007（依存順）。T008・T009は並行可
+- Phase 2: T002→T003→T004（同一ファイル、順次）。T005→T006→T007（依存順）。T008はT002-T004完了後に実施
 - Phase 3: T010・T011は並行可。T012以降はT010・T011に依存し、`page.tsx`の同一ファイル内で順次進める
 - Phase 4: T017→T018の順
 
 ### Parallel Opportunities
 
-- Phase 2: T008（バックエンドテスト）とT009（ドキュメント更新）は並行実行可能
 - Phase 3: T010（`pc-api.ts`）とT011（`page.tsx`へのtextarea追加）は異なるファイルのため並行実行可能
 - Phase 4以降はほぼ同一ファイル（`page.tsx`）への逐次変更のため、並行実行の余地は小さい
 
 ---
-
-## Parallel Example: Foundational
-
-```bash
-# T008とT009は異なるファイルのため並行実行可能
-Task: "backend/ecs/tests/test-gemini-accuracy.py にmanufacturer/model抽出・リトライ・機微データ除外のテストケースを追加"
-Task: "docs/ubiquitous-language.md に新用語を追加"
-```
 
 ## Parallel Example: User Story 1（着手時）
 
@@ -153,3 +143,4 @@ Task: "frontend/src/app/pcs/register/page.tsx に貼り付け用textareaを追�
 - `page.tsx`への変更が多いUser Story 1・2は同一ファイルへの逐次変更が中心となり、並行実行の余地は限定的
 - 各タスク完了後、論理的な区切りでコミットすることを推奨（`/speckit-git-commit`）
 - 各チェックポイントで [quickstart.md](./quickstart.md) の該当シナリオを確認してから次フェーズに進むこと
+- T009は欠番。`docs/ubiquitous-language.md`への新用語（「貼り付け入力欄」「Gemini API呼び出しリトライ」）追加は計画時点で実施済みのため、実装タスクとしては計上していない（[plan.md](./plan.md) Constitution Check参照）

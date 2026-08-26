@@ -39,7 +39,7 @@ Issue #9「AIによるPC情報取得機能が未実装」への対応。実コ�
 - [x] **Layer 3 - Cost-Awareness**: 新規AWSリソースを追加しない。ECS自動スリープ挙動（FR-014/015, 001側）に影響なし。
 - [x] **Layer 3 - Clean Code / kebab-case**: 新規・変更ファイルは既存の命名規則（kebab-case）を踏襲。
 - [x] **Layer 3 - AI Logic**: 抽出ロジックはGeminiのプロンプトベース抽出を維持し、正規表現による硬直的パースへの置き換えは行わない。リトライ（FR-007）はネットワーク/API障害対策であり、抽出ロジック自体の変更ではない。
-- [ ] **Layer 3 - Ubiquitous Language**: 新用語（「貼り付け入力」「抽出リトライ」等）を`docs/ubiquitous-language.md`に追加する作業をPhase 1のタスクとして計上（未実施、Phase 1で対応）。
+- [x] **Layer 3 - Ubiquitous Language**: 新用語「貼り付け入力欄」「Gemini API呼び出しリトライ」を`docs/ubiquitous-language.md`（セクション5）に追加済み（実施済み、tasks.mdでの個別タスク計上は不要）。
 
 Constitution違反なし。Complexity Trackingへの記載は不要。
 
@@ -136,15 +136,15 @@ docs/
 
 ### Phase C: 抽出結果の自動反映と手動編集の配線
 
-**C1. フォームフィールドの是正と抽出結果の自動反映（FR-004）**
-- **目的**: 現行フォームには`manufacturer`/`model`欄が存在せず、代わりにPcエンティティに存在しない`gpu`欄がある不整合を是正した上で、抽出結果を自動反映する。
-- **作業内容**: `manufacturer`・`model`の入力欄を追加し、`gpu`欄は削除（Specs定義外のため）。`parseSpecs()`の戻り値を`setCpu`/`setMemory`/`setStorage`/`setOs`/`setManufacturer`/`setModel`に反映。
+**C1. フォームフィールドの追加と抽出結果の自動反映（FR-004）**
+- **目的**: 現行フォームに存在しない`manufacturer`/`model`欄を追加し、抽出結果を自動反映する。
+- **作業内容**: `manufacturer`・`model`の入力欄を追加する。`gpu`欄はPcエンティティ・Specs定義に存在しない余剰フィールドだが、Constitution（Strict Scope Boundaries：担当Issue外の変更・削除は最小限に）に従い、issue #9の修正に不要な削除は行わず**現状のまま残す**（本ドキュメント末尾「リスク・未決事項」R4参照）。`parseSpecs()`の戻り値を`setCpu`/`setMemory`/`setStorage`/`setOs`/`setManufacturer`/`setModel`に反映。
 - **Done条件**: 貼り付け→抽出後、CPU・メモリ・ストレージ・OS・メーカー・モデルの各欄に値が自動入力される。
 - **影響ファイル案**: `frontend/src/app/pcs/register/page.tsx`
 
 **C2. 手動編集を送信データに反映（FR-005）**
 - **目的**: 診断済みBug（手動編集した値が送信データに反映されない）を解消する。
-- **作業内容**: `handleSubmit`が`registerPC()`に渡すデータを、stateから構築した構造化オブジェクト（`cpu, memory, storage, os, manufacturer, model`）に変更する。**設計判断（要合意、リスクR1参照）**: `POST /api/pcs`の契約を「生テキストを受け取りサーバー側で再度Gemini抽出する」方式から「クライアントで確定済みの構造化フィールドを受け取る」方式に変更する。これを行わないと、サーバー側で`create_pc()`が`specs_text`を再度Geminiに投げて上書きしてしまい、ユーザーの手動編集が反映されない。
+- **作業内容**: `handleSubmit`が`registerPC()`に渡すデータを、stateから構築した構造化オブジェクト（`cpu, memory, storage, os, manufacturer, model`）に変更する。[research.md](./research.md) Decision 4の通り、`POST /api/pcs`の契約を「生テキストを受け取りサーバー側で再度Gemini抽出する」方式から「クライアントで確定済みの構造化フィールドを受け取る」方式に変更済みとする。これを行わないと、サーバー側で`create_pc()`が`specs_text`を再度Geminiに投げて上書きしてしまい、ユーザーの手動編集が反映されない。
 - **Done条件**: 自動反映後に手動でCPU欄を書き換えて登録すると、書き換え後の値でPCが登録される。
 - **影響ファイル案**: `frontend/src/app/pcs/register/page.tsx`, `frontend/src/services/pc-api.ts`, `backend/ecs/src/main.py`, `backend/ecs/src/services/pc_service.py`, `specs/002-ai-pc-info-extraction/contracts/api.md`
 
@@ -195,14 +195,18 @@ docs/
 
 ## リスク・未決事項（決めるべき順番）
 
-1. **R1（最優先・Phase C着手前に決定必須）**: `POST /api/pcs`の契約を「生テキスト＋サーバー側再抽出」から「クライアント確定済みの構造化フィールド受け取り」に変更するか。
-   - 推奨: 変更する。理由: 変更しない限り、手動編集（FR-005）が登録直前にサーバー側の再抽出で上書きされてしまう。
-2. **R2（Phase A2着手前に決定必須）**: `Pc.model`を必須のままにするか、Optionalに緩和するか。
-   - 推奨: Optionalに緩和し、フロントの送信前バリデーションで実質必須を担保する。
-3. **R3（Phase A1着手前に決定）**: `Pc.serial_number`フィールド（`data-model.md`未記載だがコードに存在）を今回削除するか、将来のバーコード/シリアル読み取り機能のために残すか。
+### 解決済みの設計判断（参考）
+
+以下は検討の結果すでに決定済み（[research.md](./research.md) Decision 4, 5参照）。tasks.mdはこの決定を前提に構成されている。
+
+- **`POST /api/pcs`の契約**: 「生テキスト＋サーバー側再抽出」から「クライアント確定済みの構造化フィールド受け取り」に変更する（[research.md](./research.md) Decision 4）。
+- **`Pc.model`の必須制約**: Optionalに緩和し、フロントの送信前バリデーションで実質必須を担保する（[research.md](./research.md) Decision 5）。
+
+### 残るリスク・未決事項
+
+1. **R3（Phase A1着手前に決定）**: `Pc.serial_number`フィールド（`data-model.md`未記載だがコードに存在）を今回削除するか、将来のバーコード/シリアル読み取り機能のために残すか。
    - 推奨: 002のスコープ外として現状維持（削除も抽出対象追加もしない）。別issueで扱う。
-4. **R4（002スコープ外、別途整理）**: `register/page.tsx`の「PC名」入力欄は`Pc`エンティティに存在しないフィールドであり、現状も送信されていない。002では触れず、別issueとして切り出すか、001側の設計判断を仰ぐか。
-5. **R5（実装事項、決定不要）**: `manufacturer`/`model`欄がフォームに存在しない、`gpu`欄が余剰である点はPhase C1で機械的に是正する。
+2. **R4（002スコープ外、別途整理）**: `register/page.tsx`には`Pc`エンティティに存在しない・実データと結びついていない孤立フィールドが複数残っている（「PC名」入力欄、および今回追加しない`gpu`欄）。002では触れず、別issueとして切り出すか、001側の設計判断を仰ぐか。
 
 ## Complexity Tracking
 
