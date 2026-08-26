@@ -41,13 +41,11 @@ def create_pc(owner_id: str = None, specs_text: str = None, pc_type: str = "N") 
     """
     PCを新規作成
     """
+    if not owner_id:
+        raise HTTPException(status_code=400, detail="owner_id is required")
+
     # スペックを解析
     parsed_specs = parse_specs(specs_text)
-    
-    # owner_idが指定されていない場合は、認証情報から取得するなどの処理が必要（仮実装）
-    # ここでは、owner_idが指定されていない場合はエラーとする
-    if owner_id is None:
-        raise HTTPException(status_code=400, detail="owner_id is required")
     
     # PC IDを生成
     pc_id = generate_pc_id(owner_id, pc_type)
