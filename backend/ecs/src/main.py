@@ -100,10 +100,19 @@ def parse_specs_endpoint(request: PcParseRequest) -> Dict[str, Any]:
 @app.post("/api/pcs", response_model=Pc)
 def create_pc_endpoint(request: PcCreateRequest) -> Pc:
     """
-    新しい PC を登録する
+    新しい PC を登録する（スペック項目はクライアントで確定済みの構造化フィールドとして受け取る）
     """
     try:
-        result_dict = create_pc(request.owner_id, request.specs_text, request.pc_type)
+        result_dict = create_pc(
+            owner_id=request.owner_id,
+            pc_type=request.pc_type,
+            cpu=request.cpu,
+            memory=request.memory,
+            storage=request.storage,
+            os=request.os,
+            manufacturer=request.manufacturer,
+            model=request.model,
+        )
         return Pc(**result_dict)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create PC: {str(e)}")

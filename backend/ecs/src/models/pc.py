@@ -14,7 +14,7 @@ class Pc(BaseApiModel):
     storage: Optional[str] = None
     os: Optional[str] = None
     manufacturer: Optional[str] = None
-    model: str
+    model: Optional[str] = None
     serial_number: Optional[str] = None
     created_at: str
     updated_at: str
@@ -22,8 +22,13 @@ class Pc(BaseApiModel):
 
 class PcCreateRequest(BaseApiModel):
     owner_id: Optional[str] = None
-    specs_text: Optional[str] = None
     pc_type: str = "N"
+    cpu: Optional[str] = None
+    memory: Optional[str] = None
+    storage: Optional[str] = None
+    os: Optional[str] = None
+    manufacturer: Optional[str] = None
+    model: Optional[str] = None
 
 
 class PcParseRequest(BaseApiModel):

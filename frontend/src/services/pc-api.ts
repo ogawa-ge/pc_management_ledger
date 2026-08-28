@@ -1,8 +1,24 @@
 // PC関連のAPI呼び出しを処理するサービス
 import { PC } from '@/types/pc';
 
-// PCスペック解析
-export const parseSpecs = async (specsText: string) => {
+// Gemini APIによる抽出結果（parse-specsのレスポンス）
+export interface PcSpecs {
+  cpu?: string | null;
+  memory?: string | number | null;
+  storage?: string | number | null;
+  os?: string | null;
+  manufacturer?: string | null;
+  model?: string | null;
+}
+
+// parse-specsが失敗した場合のレスポンス（FR-007: 3回リトライ後もエラーの場合 retriesExhausted が true になる）
+export interface PcSpecsError {
+  error: string;
+  retriesExhausted?: boolean;
+}
+
+// PCスペック解析（貼り付けられたターミナル出力からAIで抽出、DBへの書き込みは行わない）
+export const parseSpecs = async (specsText: string): Promise<PcSpecs | PcSpecsError> => {
   try {
     const response = await fetch('/api/pcs/parse-specs', {
       method: 'POST',
@@ -24,15 +40,15 @@ export const parseSpecs = async (specsText: string) => {
   }
 };
 
-// PC登録
-export const registerPC = async (ownerId: string, specsText: string, pcType: string = "N") => {
+// PC登録（specsはクライアント側で確定済み（抽出結果 or 手動編集後）の構造化フィールド）
+export const registerPC = async (ownerId: string, specs: PcSpecs, pcType: string = "N") => {
   try {
     const response = await fetch('/api/pcs', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ ownerId, specsText, pcType }),
+      body: JSON.stringify({ ownerId, pcType, ...specs }),
     });
 
     if (!response.ok) {

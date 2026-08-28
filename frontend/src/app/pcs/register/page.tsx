@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import TerminalCommand from '@/components/terminal-command';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { getUsers, parseSpecs, registerPC } from '@/services/pc-api';
+import { getUsers, parseSpecs, registerPC, PcSpecsError } from '@/services/pc-api';
 
 const PCRegisterPage = () => {
   const { data: session } = useSession();
@@ -13,12 +13,20 @@ const PCRegisterPage = () => {
   const [cpu, setCpu] = useState('');
   const [memory, setMemory] = useState('');
   const [storage, setStorage] = useState('');
+  const [manufacturer, setManufacturer] = useState('');
+  const [model, setModel] = useState('');
   const [gpu, setGpu] = useState('');
   const [ownerId, setOwnerId] = useState('');
   const [users, setUsers] = useState<any[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const router = useRouter();
+
+  // 貼り付け入力欄（ユビキタス言語: 「貼り付け入力欄」）とAI自動抽出まわりの状態
+  const [terminalOutput, setTerminalOutput] = useState('');
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [extractionError, setExtractionError] = useState<string | null>(null);
+  const [requiredFieldWarning, setRequiredFieldWarning] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -48,19 +56,73 @@ const PCRegisterPage = () => {
     }
   }, [session]);
 
+  // 貼り付けられたターミナル出力をGemini APIで抽出し、フォームに自動反映する（US1, FR-002〜FR-004, FR-006〜FR-008）
+  const handleExtract = async () => {
+    setExtractionError(null);
+
+    if (!terminalOutput.trim()) {
+      setExtractionError('貼り付け欄が空です。ターミナルの実行結果を貼り付けてください。');
+      return;
+    }
+
+    // FR-006: 送信前にJSONとして解析できるか検証し、不正な場合はAPIを呼ばずエラー表示する
+    try {
+      JSON.parse(terminalOutput);
+    } catch {
+      setExtractionError('貼り付けた内容がJSONとして解析できません。正しい形式で貼り付けてください。');
+      return;
+    }
+
+    setIsExtracting(true);
+    try {
+      const result = await parseSpecs(terminalOutput);
+
+      if ('error' in result) {
+        const errorResult = result as PcSpecsError;
+        // FR-007: 3回リトライしても失敗した場合はエラー内容を表示し手動入力を促す。貼り付け内容はクリアしない。
+        setExtractionError(
+          errorResult.retriesExhausted
+            ? `AIによる自動抽出に失敗しました（${errorResult.error}）。3回再試行しましたが失敗したため、以下のフォームに手動で入力してください。`
+            : `AIによる自動抽出に失敗しました（${errorResult.error}）。`
+        );
+        return;
+      }
+
+      // FR-004: 判断可能な項目のみをフォームへ反映する（取得できなかった項目は空欄のまま）
+      setCpu(result.cpu != null ? String(result.cpu) : '');
+      setMemory(result.memory != null ? String(result.memory) : '');
+      setStorage(result.storage != null ? String(result.storage) : '');
+      setOs(result.os != null ? String(result.os) : '');
+      setManufacturer(result.manufacturer != null ? String(result.manufacturer) : '');
+      setModel(result.model != null ? String(result.model) : '');
+    } catch (error) {
+      console.error('スペック抽出エラー:', error);
+      setExtractionError('AIによる自動抽出中に通信エラーが発生しました。手動で入力してください。');
+    } finally {
+      setIsExtracting(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!ownerId) {
       alert('オーナーユーザーを選択してください。');
       return;
     }
+
+    // FR-009: 重要項目（モデル名）が未入力の場合は警告するが、登録はブロックしない
+    setRequiredFieldWarning(model.trim() ? null : 'モデル名が未入力です。可能であれば入力してください。');
+
     setIsSubmitting(true);
 
     try {
-      // API呼び出しのロジックを実装
-      const specsText = await parseSpecs(terminalCommand);
-      const result = await registerPC(ownerId, specsText, 'N');
-      
+      // FR-005: 自動反映後に手動で編集された値も含め、現在のフォームstateから登録データを構築する
+      const result = await registerPC(
+        ownerId,
+        { cpu, memory, storage, os, manufacturer, model },
+        'N'
+      );
+
       console.log('登録成功:', result);
       setSubmitSuccess(true);
       // 登録成功後に一覧ページにリダイレクト
@@ -80,11 +142,39 @@ const PCRegisterPage = () => {
   return (
     <div className="pc-register-page">
       <h1>PC登録</h1>
-      
+
       <div className="terminal-section">
         <h2>スペック取得コマンド</h2>
         <p>以下のコマンドを実行して、PCのスペック情報を取得してください。</p>
         <TerminalCommand command={terminalCommand} />
+
+        <div className="form-group mt-4">
+          <label htmlFor="terminalOutput" className="block text-sm font-semibold mb-2">
+            ターミナル実行結果を貼り付けてください
+          </label>
+          <textarea
+            id="terminalOutput"
+            value={terminalOutput}
+            onChange={(e) => setTerminalOutput(e.target.value)}
+            rows={6}
+            className="w-full p-2 border border-gray-300 rounded font-mono text-sm"
+            placeholder="ここにコマンドの実行結果（JSON）を貼り付けてください"
+          />
+          <button
+            type="button"
+            onClick={handleExtract}
+            disabled={isExtracting}
+            aria-busy={isExtracting}
+            className="extract-button mt-2"
+          >
+            {isExtracting ? '抽出中...' : 'スペックを抽出'}
+          </button>
+          {extractionError && (
+            <p role="alert" aria-live="polite" className="error-message mt-2">
+              {extractionError}
+            </p>
+          )}
+        </div>
       </div>
 
       <div className="form-section">
@@ -183,6 +273,31 @@ const PCRegisterPage = () => {
             </div>
 
             <div className="form-group">
+              <label htmlFor="manufacturer">メーカー</label>
+              <input
+                type="text"
+                id="manufacturer"
+                value={manufacturer}
+                onChange={(e) => setManufacturer(e.target.value)}
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="model">モデル</label>
+              <input
+                type="text"
+                id="model"
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+              />
+              {requiredFieldWarning && (
+                <p role="alert" aria-live="polite" className="warning-message">
+                  {requiredFieldWarning}
+                </p>
+              )}
+            </div>
+
+            <div className="form-group">
               <label htmlFor="gpu">GPU</label>
               <input
                 type="text"
@@ -192,9 +307,10 @@ const PCRegisterPage = () => {
               />
             </div>
 
-            <button 
-              type="submit" 
+            <button
+              type="submit"
               disabled={isSubmitting}
+              aria-busy={isSubmitting}
               className="submit-button"
             >
               {isSubmitting ? '登録中...' : 'PCを登録'}

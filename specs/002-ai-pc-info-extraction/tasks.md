@@ -28,13 +28,13 @@ Webアプリケーション構成（001-pc-managementと同一）: `frontend/src
 
 **⚠️ CRITICAL**: このフェーズが完了するまでUser Story 1/2の実装には着手しない
 
-- [ ] T002 `backend/ecs/src/services/gemini_service.py` のGeminiプロンプトを修正し、`cpu, memory, storage, os, manufacturer, model` の6項目を抽出するようにする（`gpu`, `motherboard`は削除）
-- [ ] T003 `backend/ecs/src/services/gemini_service.py` に、抽出対象6項目に含まれないキー（`BiosSerialNumber`等）をGemini APIへの送信前に除去するサニタイズ処理を追加する（FR-008）
-- [ ] T004 `backend/ecs/src/services/gemini_service.py` にGemini API呼び出しのリトライ処理（最大3回、指数バックオフ）を追加し、3回失敗時は `{"error": "...", "retriesExhausted": true}` を返すようにする（FR-007）
-- [ ] T005 `backend/ecs/src/models/pc.py` を更新する: `Pc.model` を `Optional[str] = None` に緩和し、`PcCreateRequest` を `specs_text` ではなく構造化フィールド（`cpu, memory, storage, os, manufacturer, model`）を受け取る形に変更する（[data-model.md](./data-model.md) 参照）
-- [ ] T006 `backend/ecs/src/services/pc_service.py` の `create_pc()` を更新し、内部で `parse_specs()` を再実行せず、渡された構造化フィールドをそのまま `Pc` に永続化するようにする（依存: T005）
-- [ ] T007 `backend/ecs/src/main.py` の `POST /api/pcs` と `POST /api/pcs/parse-specs` ハンドラを [contracts/api.md](./contracts/api.md) の定義に合わせて更新する（依存: T005, T006）
-- [ ] T008 `backend/ecs/tests/test-gemini-accuracy.py` に、manufacturer/model抽出、リトライ、機微データ除外のテストケースを追加する（依存: T002-T004）
+- [X] T002 `backend/ecs/src/services/gemini_service.py` のGeminiプロンプトを修正し、`cpu, memory, storage, os, manufacturer, model` の6項目を抽出するようにする（`gpu`, `motherboard`は削除）
+- [X] T003 `backend/ecs/src/services/gemini_service.py` に、抽出対象6項目に含まれないキー（`BiosSerialNumber`等）をGemini APIへの送信前に除去するサニタイズ処理を追加する（FR-008）
+- [X] T004 `backend/ecs/src/services/gemini_service.py` にGemini API呼び出しのリトライ処理（最大3回、指数バックオフ）を追加し、3回失敗時は `{"error": "...", "retriesExhausted": true}` を返すようにする（FR-007）
+- [X] T005 `backend/ecs/src/models/pc.py` を更新する: `Pc.model` を `Optional[str] = None` に緩和し、`PcCreateRequest` を `specs_text` ではなく構造化フィールド（`cpu, memory, storage, os, manufacturer, model`）を受け取る形に変更する（[data-model.md](./data-model.md) 参照）
+- [X] T006 `backend/ecs/src/services/pc_service.py` の `create_pc()` を更新し、内部で `parse_specs()` を再実行せず、渡された構造化フィールドをそのまま `Pc` に永続化するようにする（依存: T005）
+- [X] T007 `backend/ecs/src/main.py` の `POST /api/pcs` と `POST /api/pcs/parse-specs` ハンドラを [contracts/api.md](./contracts/api.md) の定義に合わせて更新する（依存: T005, T006）
+- [X] T008 `backend/ecs/tests/test-gemini-accuracy.py` に、manufacturer/model抽出、リトライ、機微データ除外のテストケースを追加する（依存: T002-T004）
 
 **Checkpoint**: バックエンドの抽出・登録APIが新しい契約（[contracts/api.md](./contracts/api.md)）で動作する状態
 
@@ -48,13 +48,13 @@ Webアプリケーション構成（001-pc-managementと同一）: `frontend/src
 
 ### Implementation for User Story 1
 
-- [ ] T010 [US1] `frontend/src/services/pc-api.ts` の `parseSpecs()`/`registerPC()` を [contracts/api.md](./contracts/api.md) に合わせて構造化フィールドの送受信に書き換える（依存: Phase 2完了）
-- [ ] T011 [P] [US1] `frontend/src/app/pcs/register/page.tsx` に「ターミナル実行結果を貼り付けてください」のラベル付き`<textarea>`（state: `terminalOutput`）を追加する
-- [ ] T012 [US1] `frontend/src/app/pcs/register/page.tsx` の `handleSubmit` 内、`parseSpecs(terminalCommand)` を `parseSpecs(terminalOutput)` に修正する（依存: T010, T011）
-- [ ] T013 [US1] `frontend/src/app/pcs/register/page.tsx` に `manufacturer`/`model` の入力欄を追加する（`gpu`欄はissue #9のスコープ外のため変更しない、依存: T011）
-- [ ] T014 [US1] `frontend/src/app/pcs/register/page.tsx` で、`parseSpecs()` のレスポンスを `cpu/memory/storage/os/manufacturer/model` の各state（`setCpu`等）に反映する（依存: T012, T013）
-- [ ] T015 [US1] `frontend/src/app/pcs/register/page.tsx` に、貼り付け内容の送信前JSONバリデーションを追加し、不正な場合はAPIを呼ばずエラーメッセージを表示する（FR-006, 依存: T012）
-- [ ] T016 [US1] `frontend/src/app/pcs/register/page.tsx` に抽出中のローディング表示（`aria-busy`）と、`retriesExhausted`受信時のエラー表示（貼り付け内容は保持したまま）を追加する（FR-007のUI側, 依存: T014）
+- [X] T010 [US1] `frontend/src/services/pc-api.ts` の `parseSpecs()`/`registerPC()` を [contracts/api.md](./contracts/api.md) に合わせて構造化フィールドの送受信に書き換える（依存: Phase 2完了）
+- [X] T011 [P] [US1] `frontend/src/app/pcs/register/page.tsx` に「ターミナル実行結果を貼り付けてください」のラベル付き`<textarea>`（state: `terminalOutput`）を追加する
+- [X] T012 [US1] `frontend/src/app/pcs/register/page.tsx` の `handleSubmit` 内、`parseSpecs(terminalCommand)` を `parseSpecs(terminalOutput)` に修正する（依存: T010, T011）— **実装メモ**: 実際にはSpec の Acceptance Scenario 1（貼り付け＝トリガー）に厳密に合わせるため、抽出処理を`handleSubmit`から切り出し、専用の`handleExtract`（「スペックを抽出」ボタン）に変更した。登録ボタン押下時ではなく抽出ボタン押下時に`parseSpecs(terminalOutput)`が呼ばれる。
+- [X] T013 [US1] `frontend/src/app/pcs/register/page.tsx` に `manufacturer`/`model` の入力欄を追加する（`gpu`欄はissue #9のスコープ外のため変更しない、依存: T011）
+- [X] T014 [US1] `frontend/src/app/pcs/register/page.tsx` で、`parseSpecs()` のレスポンスを `cpu/memory/storage/os/manufacturer/model` の各state（`setCpu`等）に反映する（依存: T012, T013）
+- [X] T015 [US1] `frontend/src/app/pcs/register/page.tsx` に、貼り付け内容の送信前JSONバリデーションを追加し、不正な場合はAPIを呼ばずエラーメッセージを表示する（FR-006, 依存: T012）
+- [X] T016 [US1] `frontend/src/app/pcs/register/page.tsx` に抽出中のローディング表示（`aria-busy`）と、`retriesExhausted`受信時のエラー表示（貼り付け内容は保持したまま）を追加する（FR-007のUI側, 依存: T014）
 
 **Checkpoint**: User Story 1が独立して動作・検証可能（[quickstart.md](./quickstart.md) シナリオ1〜3）
 
@@ -68,8 +68,8 @@ Webアプリケーション構成（001-pc-managementと同一）: `frontend/src
 
 ### Implementation for User Story 2
 
-- [ ] T017 [US2] `frontend/src/app/pcs/register/page.tsx` の `handleSubmit` を修正し、`parseSpecs()` の戻り値をそのまま送信するのではなく、フォームstate（編集後の値を含む）から構築したオブジェクトを `registerPC()` に渡すようにする（依存: T010, T014）
-- [ ] T018 [US2] `frontend/src/app/pcs/register/page.tsx` に、送信前に必須項目（例: `model`が空欄）を警告するクライアント側バリデーションを追加する（FR-009, 依存: T017）
+- [X] T017 [US2] `frontend/src/app/pcs/register/page.tsx` の `handleSubmit` を修正し、`parseSpecs()` の戻り値をそのまま送信するのではなく、フォームstate（編集後の値を含む）から構築したオブジェクトを `registerPC()` に渡すようにする（依存: T010, T014）
+- [X] T018 [US2] `frontend/src/app/pcs/register/page.tsx` に、送信前に必須項目（例: `model`が空欄）を警告するクライアント側バリデーションを追加する（FR-009, 依存: T017）
 
 **Checkpoint**: User Story 1・2ともに独立して動作・検証可能（[quickstart.md](./quickstart.md) シナリオ1）
 
@@ -79,9 +79,9 @@ Webアプリケーション構成（001-pc-managementと同一）: `frontend/src
 
 **Purpose**: 全体検証と回帰確認
 
-- [ ] T019 [P] [quickstart.md](./quickstart.md) のシナリオ1〜4を実機（Windows 11 / PowerShell）で実行し、結果を記録する
-- [ ] T020 [P] `frontend/src/app/pcs/register/page.tsx` について、[quickstart.md](./quickstart.md) のa11yチェックリスト（label関連付け、Tab順序、`aria-live`、`aria-busy`、色以外でのエラー表現）を確認する（FR-010）
-- [ ] T021 001-pc-managementの管理者代理登録画面（US3、`register/page.tsx`を一般ユーザー自己登録と共用）で、管理者としてログインした状態でも貼り付け入力欄・AI自動抽出・手動編集が同様に動作することを確認する（[quickstart.md](./quickstart.md) 参照）
+- [ ] T019 [P] [quickstart.md](./quickstart.md) のシナリオ1〜4を実機（Windows 11 / PowerShell）で実行し、結果を記録する — **未実施**: 実機・実際のGemini API呼び出し・実ログインセッションが必要なため、実装エージェントでは実行不可。ユーザーによる手動実施が必要。
+- [X] T020 [P] `frontend/src/app/pcs/register/page.tsx` について、[quickstart.md](./quickstart.md) のa11yチェックリスト（label関連付け、Tab順序、`aria-live`、`aria-busy`、色以外でのエラー表現）を確認する（FR-010）— コードレベルで確認済み（label の htmlFor 関連付け、tabindex 不使用による自然なDOM順、role="alert"/aria-live、aria-busy、テキストベースのエラー表示、globals.cssでのoutline除去なし）。ブラウザでの実機確認はT019に含めて実施のこと。
+- [ ] T021 001-pc-managementの管理者代理登録画面（US3、`register/page.tsx`を一般ユーザー自己登録と共用）で、管理者としてログインした状態でも貼り付け入力欄・AI自動抽出・手動編集が同様に動作することを確認する（[quickstart.md](./quickstart.md) 参照）— **未実施**: 管理者アカウントでの実ログインセッションが必要なため、実装エージェントでは実行不可。ユーザーによる手動実施が必要。
 
 ---
 

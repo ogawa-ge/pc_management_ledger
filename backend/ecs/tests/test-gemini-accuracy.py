@@ -11,13 +11,16 @@ Gemini PC スペック抽出精度計算スクリプト
 """
 
 import json
+import os
 import sys
 import argparse
 import pytest
+import urllib.error
 from datetime import datetime
 from typing import Dict, List, Any, Tuple
 from dataclasses import dataclass, asdict
 from enum import Enum
+from unittest.mock import patch
 import importlib.util
 from pathlib import Path
 from dotenv import load_dotenv
@@ -26,8 +29,8 @@ from dotenv import load_dotenv
 env_path = Path(__file__).parent.parent.parent.parent / ".env.local"
 load_dotenv(dotenv_path=env_path)
 
-# gemini-service.py を動的にインポート
-_service_path = Path(__file__).parent.parent / "src" / "services" / "gemini-service.py"
+# gemini_service.py を動的にインポート
+_service_path = Path(__file__).parent.parent / "src" / "services" / "gemini_service.py"
 spec = importlib.util.spec_from_file_location("gemini_service", _service_path)
 gemini_service = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(gemini_service)
@@ -464,7 +467,7 @@ class TestGeminiPCSpecsExtractionStandard:
             OS: Windows 11 Pro
             Motherboard: ASUS ROG STRIX Z790-E
             """,
-            {"cpu": "Intel", "memory": "32", "storage": "2000", "os": "Windows", "gpu": "RTX"}
+            {"cpu": "Intel", "memory": "32", "storage": "2000", "os": "Windows"}
         ),
         # GPU 統合情報 - AMD Radeon
         (
@@ -476,7 +479,7 @@ class TestGeminiPCSpecsExtractionStandard:
             Motherboard: ASUS ROG CROSSHAIR X570-F
             OS: Windows 11 Pro
             """,
-            {"cpu": "Ryzen", "memory": "64", "storage": "2000", "os": "Windows", "gpu": "Radeon"}
+            {"cpu": "Ryzen", "memory": "64", "storage": "2000", "os": "Windows"}
         ),
         # 複数ドライブ情報
         (
@@ -503,7 +506,7 @@ class TestGeminiPCSpecsExtractionStandard:
             GPU: NVIDIA GeForce RTX 4090
             OS: Windows 11 Pro
             """,
-            {"cpu": "Intel", "memory": "32", "storage": "1000", "os": "Windows", "gpu": "RTX"}
+            {"cpu": "Intel", "memory": "32", "storage": "1000", "os": "Windows"}
         ),
         # ゲーミングPC スペック
         (
@@ -518,7 +521,7 @@ class TestGeminiPCSpecsExtractionStandard:
             PSU: Corsair RM1000x
             OS: Windows 11 Pro
             """,
-            {"cpu": "Ryzen", "memory": "64", "storage": "2000", "os": "Windows", "gpu": "RTX"}
+            {"cpu": "Ryzen", "memory": "64", "storage": "2000", "os": "Windows"}
         ),
         # ワークステーション情報
         (
@@ -531,7 +534,7 @@ class TestGeminiPCSpecsExtractionStandard:
             GPU: NVIDIA RTX 6000 Ada
             OS: Linux Ubuntu 22.04 LTS
             """,
-            {"cpu": "Xeon", "memory": "192", "storage": "4000", "os": "Ubuntu", "gpu": "RTX"}
+            {"cpu": "Xeon", "memory": "192", "storage": "4000", "os": "Ubuntu"}
         ),
         # Raspberry Pi
         (
@@ -675,7 +678,7 @@ class TestGeminiPCSpecsExtractionEdgeCases:
             GPU,NVIDIA RTX 3090
             OS,Windows 11 Pro
             """,
-            {"cpu": "Ryzen", "memory": "32", "storage": "2000", "os": "Windows", "gpu": "RTX"}
+            {"cpu": "Ryzen", "memory": "32", "storage": "2000", "os": "Windows"}
         ),
         # スペルミス・typo
         (
@@ -989,6 +992,147 @@ class TestGeminiRobustness:
         assert isinstance(result, dict)
         # CPU、メモリ、OS 情報は抽出できるべき
         assert any(key in result for key in ["cpu", "memory", "os"])
+
+
+class _FakeGeminiResponse:
+    """urllib.request.urlopen() が返すレスポンスの最小限のフェイク（with文対応）"""
+
+    def __init__(self, payload: bytes):
+        self._payload = payload
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def read(self) -> bytes:
+        return self._payload
+
+
+def _fake_success_payload(extracted: Dict[str, Any]) -> bytes:
+    return json.dumps({
+        "candidates": [
+            {"content": {"parts": [{"text": json.dumps(extracted)}]}}
+        ]
+    }).encode("utf-8")
+
+
+class TestGeminiManufacturerModelExtraction:
+    """manufacturer/model抽出のテスト（FR-003, T002）"""
+
+    MANUFACTURER_MODEL_TEST_CASES = [
+        (
+            """
+            System Manufacturer: Dell Inc.
+            System Model: XPS 13 Plus
+            Processor: Intel Core i7-1360P
+            Memory: 16 GB
+            Storage: 512 GB SSD
+            OS: Windows 11 Pro
+            """,
+            {"manufacturer": "Dell", "model": "XPS"}
+        ),
+        (
+            """
+            Model Name: MacBook Pro
+            Model Identifier: MacBookPro18,1
+            Chip: Apple M3 Max
+            Memory: 36GB
+            Storage: 1TB SSD
+            """,
+            {"manufacturer": "Apple", "model": "MacBook"}
+        ),
+    ]
+
+    @pytest.mark.parametrize("specs_text,expected_fields", MANUFACTURER_MODEL_TEST_CASES)
+    def test_manufacturer_model_extraction(self, specs_text: str, expected_fields: Dict[str, str]):
+        """manufacturer/modelが抽出対象に含まれ、gpu/motherboardはもう含まれないことを確認"""
+        result = parse_specs(specs_text)
+
+        assert isinstance(result, dict)
+        assert "gpu" not in result, "gpu はdata-model.mdの6項目に含まれないため抽出対象外のはず"
+        assert "motherboard" not in result, "motherboard はdata-model.mdの6項目に含まれないため抽出対象外のはず"
+
+        for field, expected_value in expected_fields.items():
+            extracted = str(result.get(field, "")).lower()
+            assert expected_value.lower() in extracted, (
+                f"Expected '{expected_value}' in field '{field}', got '{result.get(field)}'"
+            )
+
+
+class TestGeminiRetryBehavior:
+    """Gemini API呼び出し失敗時のリトライ処理のテスト（FR-007, T004）"""
+
+    def test_retries_up_to_three_times_then_returns_structured_error(self):
+        """3回すべて失敗した場合、retriesExhausted付きの構造化エラーを返す"""
+        with patch.object(gemini_service.urllib.request, "urlopen") as mock_urlopen, \
+             patch.object(gemini_service.time, "sleep") as mock_sleep, \
+             patch.dict(os.environ, {"GEMINI_API_KEY": "dummy-key-for-test"}):
+            mock_urlopen.side_effect = urllib.error.URLError("connection refused")
+
+            result = parse_specs('{"ProcessorName": "Intel Core i7"}')
+
+            assert result.get("retriesExhausted") is True
+            assert "error" in result
+            assert mock_urlopen.call_count == 3
+            assert mock_sleep.call_count == 2
+
+    def test_succeeds_after_transient_failure(self):
+        """1・2回目が失敗し、3回目で成功した場合は正常に抽出結果を返す"""
+        success_response = _FakeGeminiResponse(_fake_success_payload({"cpu": "Intel Core i7", "memory": 16}))
+
+        with patch.object(gemini_service.urllib.request, "urlopen") as mock_urlopen, \
+             patch.object(gemini_service.time, "sleep"), \
+             patch.dict(os.environ, {"GEMINI_API_KEY": "dummy-key-for-test"}):
+            mock_urlopen.side_effect = [
+                urllib.error.URLError("timeout"),
+                urllib.error.URLError("timeout"),
+                success_response,
+            ]
+
+            result = parse_specs('{"ProcessorName": "Intel Core i7"}')
+
+            assert result.get("cpu") == "Intel Core i7"
+            assert "retriesExhausted" not in result
+
+
+class TestGeminiSensitiveDataExclusion:
+    """機微データ（BIOSシリアル番号等）の送信前除外のテスト（FR-008, T003）"""
+
+    def test_bios_serial_number_excluded_from_sanitized_payload(self):
+        raw = json.dumps({
+            "ProcessorName": "Intel Core i7-1360P",
+            "BiosSerialNumber": "ABC123XYZ456",
+        })
+        sanitized = gemini_service._sanitize_specs_text(raw)
+        sanitized_data = json.loads(sanitized)
+
+        assert "BiosSerialNumber" not in sanitized_data
+        assert sanitized_data.get("ProcessorName") == "Intel Core i7-1360P"
+
+    def test_non_json_input_passed_through_unchanged(self):
+        raw_text = "CPU: Intel Core i7, Memory: 16GB"
+        assert gemini_service._sanitize_specs_text(raw_text) == raw_text
+
+    def test_sensitive_data_not_sent_in_actual_request_payload(self):
+        """実際のAPI呼び出しペイロードにBiosSerialNumberが含まれないことを確認"""
+        captured_requests = []
+
+        def fake_urlopen(req, timeout=30):
+            captured_requests.append(req.data.decode("utf-8"))
+            return _FakeGeminiResponse(_fake_success_payload({"cpu": "Intel Core i7"}))
+
+        with patch.object(gemini_service.urllib.request, "urlopen", side_effect=fake_urlopen), \
+             patch.dict(os.environ, {"GEMINI_API_KEY": "dummy-key-for-test"}):
+            parse_specs(json.dumps({
+                "ProcessorName": "Intel Core i7-1360P",
+                "BiosSerialNumber": "SECRET-SERIAL-001",
+            }))
+
+        assert len(captured_requests) == 1
+        assert "SECRET-SERIAL-001" not in captured_requests[0]
+        assert "BiosSerialNumber" not in captured_requests[0]
 
 
 # ========================
