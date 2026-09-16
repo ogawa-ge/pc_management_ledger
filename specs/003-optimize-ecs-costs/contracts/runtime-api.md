@@ -7,9 +7,13 @@
 対象操作:
 
 - 参照系: `GET /api/pcs`
-- 状態変更: `POST /api/pcs`
-- 状態変更: `POST /api/pcs/{pcId}/return`
+- 状態変更（冪等ガード必須）: `POST /api/pcs`
+- 状態変更（冪等ガード必須）: `POST /api/pcs/{pcId}/return`
+- 状態変更（冪等ガード必須）: `PATCH /api/pcs/{pcId}/status`
+- 非永続処理: `POST /api/pcs/parse-specs`（内部署名と既存認証は必須だが、冪等成功結果保存は対象外）
 - 同じLambda→ECSプロキシを通る他のPC管理APIにも起動状態契約を適用する
+
+現行コードの`POST`、`PUT`、`PATCH`、`DELETE`ルートを実装時に機械的に棚卸しし、上記以外の永続状態変更ルートが見つかった場合は、実装前に本一覧へ追加して冪等ガード対象または対象外理由を確定する。分類されていない状態変更ルートをリリースしない。
 
 ## 2. 共通リクエストヘッダー
 
@@ -91,12 +95,19 @@ Retry-After: 3
 
 フロントエンドは最大待機時間内で同じキーを再送する。
 
+- `PROCESSING`取得から5分未満は、同じfingerprintでも後続要求へ処理権を渡さない。
+- 5分以上更新がなく成功未確定の場合だけ、後続要求は旧`ownerRequestId`、旧`startedAt`、`status=PROCESSING`を条件に処理権を回収できる。
+- 同時回収では条件付き更新に成功した1要求だけが新所有者となる。
+- 回収後の旧所有者は、業務書込みと成功記録を確定するトランザクションの所有者条件に失敗し、業務変更を残さない。
+
 ### 同じキーで成功済み
 
 - 初回成功と同じHTTPステータスおよび業務結果を返す。
 - レスポンスヘッダー `Idempotency-Replayed: true` を付与する。
 - PC登録、返却記録、ステータス遷移を再実行しない。
 - 状態変更の業務書込みと成功記録は DynamoDB トランザクションで同時に確定し、一方だけを成功させない。
+- トランザクション内の冪等成功更新は`status=PROCESSING`、現`ownerRequestId`、現`startedAt`を条件とし、処理権回収後の旧所有者による遅延確定を拒否する。
+- 成功結果は成功完了から7日間再利用する。7日経過後はDynamoDB TTLによる物理削除を待たず、期限条件付きで新しい`PROCESSING`へ置換して新規要求として扱う。
 
 ### 同じキーで異なる要求
 
@@ -134,21 +145,33 @@ HTTP/1.1 409 Conflict
 | `X-Internal-Request-Id` | Lambdaが生成した一意要求ID |
 | `X-Internal-Timestamp` | Unix epoch seconds |
 | `X-Internal-Body-SHA256` | 生リクエスト本文のSHA-256 hex |
+| `X-Internal-Key-Id` | 署名に使った現行秘密世代の非機密識別子 |
 | `X-Internal-Signature` | 下記canonical requestのHMAC-SHA256 hex |
 
 Canonical request:
 
 ```text
-{METHOD}\n{NORMALIZED_PATH_WITH_QUERY}\n{BODY_SHA256}\n{IDEMPOTENCY_KEY}\n{INTERNAL_REQUEST_ID}\n{TIMESTAMP}
+{METHOD}\n{NORMALIZED_PATH_WITH_QUERY}\n{BODY_SHA256}\n{IDEMPOTENCY_KEY}\n{INTERNAL_REQUEST_ID}\n{TIMESTAMP}\n{KEY_ID}
 ```
 
 ### Verification
 
 - 共有秘密は Secrets Manager から取得し、コード、ログ、レスポンスへ出力しない。
-- ECSは時刻窓（実装定数、推奨±60秒）、本文ハッシュ、定数時間比較による署名一致を検証する。
+- ECSは受信時刻との差が±60秒以内であること、本文ハッシュ、定数時間比較による署名一致を検証する。60秒を超える差は署名が一致しても拒否する。
 - 欠落、不正、期限切れは `403 Forbidden`。
 - 内部署名成功後も既存の利用者認証・認可を実行する。
 - `X-Internal-Request-Id`、操作名、結果は監査ログへ出せるが、Authorization、署名、秘密、PCスペック本文は記録しない。
+
+### Secret rotation
+
+1. 通常時、Lambdaは`current`として指定された1世代だけで署名し、ECSは同じ世代を検証する。
+2. 移行開始時、次期秘密と一意な`keyId`をSecrets Managerへ追加し、ECSだけを先に更新して現行・次期の2世代を検証可能にする。3世代以上を同時に有効化しない。
+3. Lambdaを次期`keyId`へ切り替え、正常な内部転送が成功することを確認する。Lambdaは1要求を複数秘密で署名しない。
+4. 切替確認後、ECSの検証対象から旧`keyId`を削除し、Secrets Manager上の旧秘密を失効させる。
+5. 未登録または失効済み`keyId`、`keyId`と秘密が一致しない署名は業務処理前に`403`とする。エラー応答から有効な世代一覧を公開しない。
+6. 各段階で既存利用者認証・認可を省略せず、正当な要求の中断0件と旧秘密失効後の拒否を検証記録へ残す。
+
+Secrets Managerの秘密は、非機密の`keyId`と秘密値を対応付けた現行・次期の最大2世代、およびLambdaが署名に使う現行`keyId`を表現する。秘密値をCloudFormation出力、通常の環境変数、ログ、レスポンスへ含めない。LambdaとECSの実行ロールには対象秘密の読取だけを許可する。
 
 ## 8. アクティビティ更新契約
 

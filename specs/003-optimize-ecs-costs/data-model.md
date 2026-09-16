@@ -72,7 +72,7 @@ STOPPED <----- deploy / idle stop ----- STOPPING
 | `operation` | String | Yes | `PC_LIST`, `PC_REGISTER`, `PC_RETURN` 等の契約済み操作名 |
 | `status` | String | Yes | `PROCESSING`, `SUCCEEDED`, `FAILED_RETRYABLE` |
 | `ownerRequestId` | String | Yes | 処理所有権を取得した内部要求ID |
-| `startedAt` | String (ISO 8601 UTC) | Yes | 初回処理開始時刻 |
+| `startedAt` | String (ISO 8601 UTC) | Yes | 現所有者が処理権を取得した時刻。回収時に更新 |
 | `completedAt` | String (ISO 8601 UTC) | No | 成功完了時刻 |
 | `responseStatus` | Number | No | 再利用する成功HTTPステータス |
 | `responseBody` | String | No | 小容量の成功JSON応答。機密情報を保存しない |
@@ -85,7 +85,9 @@ STOPPED <----- deploy / idle stop ----- STOPPING
 - 同じキーで `requestFingerprint` が異なる場合は `409 Conflict`。キーの使い回しを許可しない。
 - 新規キーは条件式 `attribute_not_exists(entityId)` で `PROCESSING` を作成し、成功した要求だけが業務処理を開始する。
 - `SUCCEEDED` の同一キー・同一fingerprintは保存済みレスポンスを返し、業務処理を再実行しない。
-- `PROCESSING` の同一要求は `409` と `Retry-After` を返し、別所有者へ処理権を渡さない。
+- `PROCESSING` の同一要求は原則 `409` と `Retry-After` を返し、`startedAt > now - 5 minutes` または成功確定済みなら別所有者へ処理権を渡さない。
+- `PROCESSING` が処理開始から5分以上更新されず成功も確定していない場合だけ、後続の同一fingerprint要求は旧`ownerRequestId`、旧`startedAt`、`status=PROCESSING`を条件に、`ownerRequestId`と`startedAt`を置換して処理権を再取得できる。条件不成立時は業務処理を開始しない。
+- `SUCCEEDED` の`expiresAt`は`completedAt + 7 days`とする。保持期間中は同じ成功結果を返し、期限後はTTL削除待ちでも条件付きで新しい`PROCESSING`へ置換して新規要求として扱う。
 - `responseBody` はDynamoDB項目上限を考慮し、PC一覧等の大きなGET応答は保存しない。状態変更の小さな成功応答だけを対象とする。
 - TTL削除は即時ではないため、`expiresAt <= now` の項目はアプリケーション側でも期限切れとして扱う。
 
@@ -95,8 +97,9 @@ STOPPED <----- deploy / idle stop ----- STOPPING
 (absent) -------- claim --------> PROCESSING
 PROCESSING ------ success ------> SUCCEEDED
 PROCESSING ------ retryable ----> FAILED_RETRYABLE
+PROCESSING -- stale 5m/reclaim --> PROCESSING (new owner)
 FAILED_RETRYABLE - reclaim -----> PROCESSING
-SUCCEEDED -------- TTL ---------> (expired/deleted)
+SUCCEEDED ---- expires after 7d -> (expired/new claim)
 ```
 
 PC登録・PC返却では、業務項目の条件付き作成/更新、履歴または返却記録の作成、Idempotent Request の `PROCESSING -> SUCCEEDED` 更新を1回の DynamoDB `TransactWriteItems` で原子的に確定する。トランザクション失敗時は成功応答を返さず、同じキーの安全な再試行を可能にする。既存業務項目へ `Idempotency-Key` 等の属性追加が必要になった場合は、実装前に本モデルと `001` のモデル契約を更新し、推測でカラムを追加しない。

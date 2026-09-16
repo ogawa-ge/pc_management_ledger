@@ -1,6 +1,6 @@
 # Phase 0: Research - NAT GatewayとECS稼働数のコスト最適化
 
-**調査基準日**: 2026-09-02  
+**調査基準日**: 2026-09-04
 **対象リージョン**: `ap-northeast-1`（東京）
 
 ## 1. NAT Gatewayを常設しないネットワーク
@@ -48,7 +48,7 @@ ECS Service の `desired_count` をデプロイ時 0 にし、Lambda が `System
 
 ### Decision
 
-フロントエンドの共通APIクライアントが操作ごとに UUID の `Idempotency-Key` を生成し、起動中応答の `Retry-After` に従って同じメソッド・パス・本文・キーを最大3分間自動再送する。ECS は状態変更操作のキーを `SystemActivity` に条件付き登録し、同じ要求の処理中・完了結果を再利用する。
+フロントエンドの共通APIクライアントが操作ごとに UUID の `Idempotency-Key` を生成し、起動中応答の `Retry-After` に従って同じメソッド・パス・本文・キーを最大3分間自動再送する。ECS は状態変更操作のキーを `SystemActivity` に条件付き登録し、成功結果を成功完了から7日間再利用する。`PROCESSING` が処理開始から5分更新されず成功も確定していない場合だけ、後続の同一要求が条件付き更新で処理所有権を回収する。
 
 ### Rationale
 
@@ -56,7 +56,11 @@ ECS Service の `desired_count` をデプロイ時 0 にし、Lambda が `System
 - ブラウザ側で元のクロージャと本文を保持すれば、手動更新なしで自動再送できる。
 - PC登録は自動採番、PC返却は記録作成を伴い、単純な再POSTでは重複し得る。キー単位の処理権取得と完了結果保存が必要。
 - GETは自然に再実行可能だが、同じ再試行基盤を使用して利用体験を統一する。
-- 完了結果はDynamoDBの項目上限を超えない小さなJSONのみ保存し、TTLで期限切れにする。状態変更の業務書込みと成功記録は DynamoDB `TransactWriteItems` で原子的に確定する。
+- 完了結果はDynamoDBの項目上限を超えない小さなJSONのみ保存し、成功完了から7日後のTTLで期限切れにする。TTL削除の遅延中もアプリケーションが期限を判定する。状態変更の業務書込みと成功記録は DynamoDB `TransactWriteItems` で原子的に確定する。
+- 5分の回収境界は、所有者が応答不能になった要求を永久に`PROCESSING`へ残さず、通常の重複到着には処理権を渡さないための固定条件である。回収更新は古い`ownerRequestId`と`startedAt`を条件にし、成功記録との競合を防ぐ。
+- 現行の永続状態変更ルートは`POST /api/pcs`、`POST /api/pcs/{pcId}/return`、`PATCH /api/pcs/{pcId}/status`の3本である。`POST /api/pcs/parse-specs`はGemini解析結果を返すが永続状態を変更しないため、内部署名の対象には含め、冪等成功結果保存からは除外する。
+- 状態変更3ルートは、既存業務テーブルへのPut/Update、必要な既存履歴項目、`SystemActivity`の成功結果を1回のDynamoDB `TransactWriteItems`で確定する。成功記録のConditionCheck/Updateに現`ownerRequestId`と現`startedAt`を含めるため、5分後に処理権を回収された旧所有者は遅延しても業務変更を確定できない。
+- PC登録の自動採番競合、返却記録作成、ステータス更新は既存PKと現状態に対する条件式で保護し、業務テーブルへ冪等キー属性を追加しない。トランザクション競合は成功扱いせず、同じキーで安全に再照合・再試行する。
 
 ### Alternatives considered
 
@@ -68,12 +72,12 @@ ECS Service の `desired_count` をデプロイ時 0 にし、Lambda が `System
 
 ### Decision
 
-Lambdaが対象操作の受付時に `lastAcceptedAt` と状態世代を更新し、ECSへの転送直前に `inFlightCount` を原子的に増やす。成功応答時に `lastActivityAt` を完了時刻へ更新し、`inFlightCount` を減らす。失敗時も件数は減らすが成功完了時刻は更新しない。停止判定は `inFlightCount=0`、状態がRUNNING、最終時刻が正常、2時間以上経過の全条件を満たす場合だけ実行する。
+Lambdaが対象操作の受付時に `lastAcceptedAt` と状態世代を更新し、ECSへの転送直前に `inFlightCount` を原子的に増やす。成功応答時に `lastActivityAt` を完了時刻へ更新し、`inFlightCount` を減らす。失敗時も件数は減らすが成功完了時刻は更新しない。停止判定は `inFlightCount=0`、状態がRUNNING、受付時刻と成功完了時刻のうち新しい有効時刻から2時間以上経過の全条件を満たす場合だけ実行する。
 
 ### Rationale
 
-- 受付と成功完了を記録する FR-012 と、処理中は停止しない FR-012a を分けて表現できる。
-- 欠損、不正時刻、負の件数では停止せず警告ログを残す fail-open が FR-015 に適合する。
+- 受付と成功完了を記録し処理中を識別する FR-013 を表現できる。
+- 欠損、不正時刻、負の件数では停止せず警告ログを残す安全側の動作が FR-014 に適合する。
 - EventBridgeを15分間隔にすれば、2時間成立後15分以内のSC-006を満たせる。
 
 ### Alternatives considered
@@ -91,7 +95,7 @@ Lambdaが対象操作の受付時に `lastAcceptedAt` と状態世代を更新�
 ### Rationale
 
 - DynamoDBの状態変更順とECS API到達順が逆転する競合にも、停止側の事後再確認で対応できる。
-- 停止開始前なら条件更新失敗で停止を中止し、開始後なら再起動するという FR-014a の二段階を実現できる。
+- 停止開始前なら条件更新失敗で停止を中止し、開始後なら再起動するという FR-016 の二段階を実現できる。
 
 ### Alternatives considered
 
@@ -102,19 +106,23 @@ Lambdaが対象操作の受付時に `lastAcceptedAt` と状態世代を更新�
 
 ### Decision
 
-ALBを追加せず既存の公開IPプロキシを維持する代わりに、Lambdaが Secrets Manager の共有シークレットを用いて、HTTPメソッド、パス、本文ハッシュ、要求ID、時刻をHMAC署名する。ECSは署名と短い時刻窓を検証し、不正・期限切れ要求を拒否する。利用者の認証・認可ヘッダーは従来どおり別途検証する。
+Lambdaが Secrets Manager の共有シークレットを用いて、HTTPメソッド、正規化パスとクエリ、本文ハッシュ、冪等キー、要求ID、送信時刻をHMAC署名する。ECSは署名と±60秒の時刻窓を検証し、不正・期限切れ要求を拒否する。共有秘密は現行と次期の最大2世代を移行中だけ検証可能にし、Lambdaを次期秘密へ切り替えて成功確認後に旧秘密を失効させる。利用者の認証・認可ヘッダーは従来どおり別途検証する。
 
 ### Rationale
 
 - LambdaはVPC外であり、ECSへプライベートIP接続するにはVPC接続とAWS API/Gemini向け出口設計が追加で必要になる。
 - 現行セキュリティグループは80番を全IPv4へ公開しているため、ネットワーク制限だけでなくアプリケーション層の内部呼出し認証が必要。
 - 実キーはコードや文書に保存せず、Secrets Manager参照とする。
+- 署名に秘密世代の識別子を含めることで、ECSは秘密値を露出せず現行・次期のどちらで検証するかを選択できる。未登録世代は試行せず拒否する。
 
 ### Alternatives considered
 
 1. **ALB/API Gateway VPC Link/NLB**: 固定費と構成要素が増え、憲章のALB回避・低コスト方針に反するため却下。
 2. **送信元IPによるSG制限**: 非VPC Lambdaの安定した送信元IPを前提にできないため却下。
 3. **署名なしで既存認証のみ**: 未認証エンドポイントや認証実装漏れへの多層防御がないため却下。
+4. **全秘密を無期限に検証**: 失効済み秘密の悪用期間を閉じられないため却下。併用は現行・次期の2世代と移行期間だけに限定する。
+
+秘密はSecrets Managerの1秘密内で非機密`keyId`と秘密値を現行・次期の最大2組として管理する。Lambdaは設定された現行`keyId`の1秘密だけを取得して署名し、ECSは登録された最大2世代を取得して検証する。実行ロールには対象秘密の`GetSecretValue`だけを付与し、CloudFormation出力、通常環境変数、ログへ秘密値を展開しない。ローテーションは「ECSへ次期追加→Lambda署名世代切替→ECSから旧世代削除」の順でデプロイし、各段階の受け入れ試験成功を次段階のゲートにする。
 
 ## 7. ARM64移行
 
