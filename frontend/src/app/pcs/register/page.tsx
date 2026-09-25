@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { ApiError, getUsers, parseSpecs, registerPC } from '@/services/pc-api';
 import { User } from '@/types/user';
+import ECSLoadingState, { useECSLoadingState } from '@/components/ecs-loading-state';
 
 const getUserLabel = (user: User): string => {
   if (user.name && user.email) return `${user.name} (${user.email})`;
@@ -31,6 +32,7 @@ const PCRegisterPage = () => {
   const [registrationError, setRegistrationError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const ecsLoading = useECSLoadingState();
   const router = useRouter();
 
   const fetchUsers = useCallback(async () => {
@@ -81,8 +83,15 @@ const PCRegisterPage = () => {
 
     try {
       // API呼び出しのロジックを実装
-      const specsText = await parseSpecs(terminalCommand);
-      const result = await registerPC(ownerId, specsText, 'N', session?.user?.id);
+      const retryOptions = {
+        onRetryStateChange: (retry: { status: 'idle' | 'starting' | 'processing' | 'timeout'; remainingSeconds: number }) => {
+          ecsLoading.setStatus(retry.status === 'idle' ? 'starting' : retry.status);
+          ecsLoading.setRemainingSeconds(retry.remainingSeconds);
+          ecsLoading.setIsLoading(retry.status !== 'idle');
+        },
+      };
+      await parseSpecs(terminalCommand, retryOptions);
+      const result = await registerPC(ownerId, terminalCommand, 'N', session?.user?.id, retryOptions);
       
       console.log('登録成功:', result);
       setSubmitSuccess(true);
@@ -109,6 +118,12 @@ const PCRegisterPage = () => {
   const terminalCommand = `powershell -Command "Get-ComputerInfo | Select-Object WindowsProductName, WindowsVersion, TotalPhysicalMemory, BiosSerialNumber, ProcessorName, GPUName | ConvertTo-Json"`;
 
   return (
+    <>
+      <ECSLoadingState
+        isLoading={ecsLoading.isLoading}
+        status={ecsLoading.status}
+        remainingSeconds={ecsLoading.remainingSeconds}
+      />
     <div className="pc-register-page">
       <h1>PC登録</h1>
       
@@ -262,6 +277,7 @@ const PCRegisterPage = () => {
         )}
       </div>
     </div>
+    </>
   );
 };
 

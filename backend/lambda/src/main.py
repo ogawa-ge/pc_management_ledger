@@ -1,4 +1,5 @@
 import json
+import uuid
 import urllib3
 from urllib.parse import urlencode
 from fastapi import FastAPI, Depends, Request, Response
@@ -8,6 +9,7 @@ from fastapi.security import HTTPBearer
 from jose import JWTError, jwt
 from typing import Optional
 from src.services.ecs_manager import get_ecs_manager
+from src.services.internal_request_signer import InternalRequestSigner, strip_internal_headers
 
 app = FastAPI()
 
@@ -87,26 +89,44 @@ async def proxy_to_ecs(path: str, request: Request):
             status_code=503,
             content={
                 "status": "starting",
-                "message": "ECS server is starting up. Please try again in 10-15 seconds."
+                "message": "バックエンドを起動しています。操作は自動的に再試行されます。",
+                "requestId": str(uuid.uuid4()),
+                "retryAfterSeconds": 15,
+                "maxWaitSeconds": 180,
             },
-            headers={"Retry-After": "15"}
+            headers={"Retry-After": "15", "Cache-Control": "no-store"}
         )
     
     # 2. リクエストの内容を ECS へフォワード
     method = request.method
     
     # クエリパラメータの再構築
-    query_params = dict(request.query_params)
+    query_params = list(request.query_params.multi_items())
     query_string = f"?{urlencode(query_params)}" if query_params else ""
     
     # 転送先 URL
     target_url = f"http://{public_ip}:80/{path}{query_string}"
     
     # ヘッダーの引き継ぎ (Hostヘッダーは上書き)
-    headers = {key: value for key, value in request.headers.items() if key.lower() != "host"}
+    headers = strip_internal_headers(
+        {key: value for key, value in request.headers.items() if key.lower() != "host"}
+    )
     
     # リクエストボディの取得
     body = await request.body()
+    idempotency_key = headers.get("idempotency-key") or str(uuid.uuid4())
+    headers["Idempotency-Key"] = idempotency_key
+    internal_request_id = str(uuid.uuid4())
+    signer = InternalRequestSigner()
+    headers.update(
+        signer.sign(
+            method=method,
+            path_with_query=f"/{path}{query_string}",
+            body=body,
+            idempotency_key=idempotency_key,
+            request_id=internal_request_id,
+        )
+    )
     
     # HTTP クライアント (urllib3) でリクエストを送信
     http = urllib3.PoolManager()

@@ -19,12 +19,12 @@
 
 **Purpose**: 新規構築を避け、001と現行コードの再利用範囲、状態変更API、検証方法、共通用語を実装前に固定する。
 
-- [ ] T001 `specs/003-optimize-ecs-costs/validation-records.md` に001由来の既存実装一覧、変更前の`nat_gateways=1` / `desired_count=1`、既存起動・停止・プロキシ・UI・認証の回帰基準、および検証記録テンプレートを作成する
-- [ ] T002 [P] `docs/ubiquitous-language.md` にBackend Runtime State、Start Lock、Idempotency Key、In-flight Operation、Runtime Generation、Internal Request Signature、Secret Generationの日本語定義とコード表記を追加する
-- [ ] T003 [P] `backend/lambda/tests/conftest.py` に実`ECSManager`のboto3 ECS・DynamoDB・CloudWatchクライアント境界と固定時計を差し替えるfixtureを追加する
-- [ ] T004 [P] `backend/ecs/tests/conftest.py` にDynamoDB resource/client、Secrets Manager、固定時計、業務書込み失敗を差し替えるfixtureを追加する
-- [ ] T005 [P] `backend/ecs/tests/test_state_changing_route_inventory.py` にFastAPIの`POST`/`PUT`/`PATCH`/`DELETE`ルートを棚卸しし、`POST /api/pcs`、`POST /api/pcs/{pc_id}/return`、`PATCH /api/pcs/{pc_id}/status`を冪等対象、`POST /api/pcs/parse-specs`を非永続対象として固定し、未分類ルートで失敗するテストを追加する
-- [ ] T006 [P] `specs/003-optimize-ecs-costs/quickstart.md` の検証コマンドを実在する`backend/lambda/tests`、`backend/ecs/tests`、`infrastructure/tests`、フロントエンド型検査・buildのパスへ合わせて確認・更新する
+- [X] T001 `specs/003-optimize-ecs-costs/validation-records.md` に001由来の既存実装一覧、変更前の`nat_gateways=1` / `desired_count=1`、既存起動・停止・プロキシ・UI・認証の回帰基準、および検証記録テンプレートを作成する
+- [X] T002 [P] `docs/ubiquitous-language.md` にBackend Runtime State、Start Lock、Idempotency Key、In-flight Operation、Runtime Generation、Internal Request Signature、Secret Generationの日本語定義とコード表記を追加する
+- [X] T003 [P] `backend/lambda/tests/conftest.py` に実`ECSManager`のboto3 ECS・DynamoDB・CloudWatchクライアント境界と固定時計を差し替えるfixtureを追加する
+- [X] T004 [P] `backend/ecs/tests/conftest.py` にDynamoDB resource/client、Secrets Manager、固定時計、業務書込み失敗を差し替えるfixtureを追加する
+- [X] T005 [P] `backend/ecs/tests/test_state_changing_route_inventory.py` にFastAPIの`POST`/`PUT`/`PATCH`/`DELETE`ルートを棚卸しし、`POST /api/pcs`、`POST /api/pcs/{pc_id}/return`、`PATCH /api/pcs/{pc_id}/status`を冪等対象、`POST /api/pcs/parse-specs`を非永続対象として固定し、未分類ルートで失敗するテストを追加する
+- [X] T006 [P] `specs/003-optimize-ecs-costs/quickstart.md` の検証コマンドを実在する`backend/lambda/tests`、`backend/ecs/tests`、`infrastructure/tests`、フロントエンド型検査・buildのパスへ合わせて確認・更新する
 
 **Checkpoint**: 既存コードの再利用境界、状態変更3ルート、全ストーリーで使う検証・用語・テスト基盤が確定している。
 
@@ -36,12 +36,12 @@
 
 **⚠️ CRITICAL**: このフェーズでは起動・停止・プロキシの代替実装を作成せず、既存コードが参照する設定、秘密、データ契約だけを整える。
 
-- [ ] T007 `specs/003-optimize-ecs-costs/data-model.md` の`global`項目と`request#{idempotencyKey}`項目について、既存`entityId`キーとの後方互換、初期値、ロック期限、成功完了+7日の期限、TTL削除待ちの置換、5分停滞回収、旧所有者の遅延確定拒否を実装可能な条件式まで最終確認する
-- [ ] T008 [P] `specs/003-optimize-ecs-costs/contracts/runtime-api.md` の状態変更3ルート、`503 starting`、`409 processing`、7日保持、5分回収、内部署名、±60秒、最大2世代ローテーションをFR-004a〜FR-016へ対応付ける
-- [ ] T009 [P] `infrastructure/stacks/database_stack.py` の既存`SystemActivity`テーブルへ`expiresAt`のTTL設定だけを追加し、専用テーブルや業務テーブル属性を増やさないCDK assertionを`infrastructure/tests/unit/test_infrastructure_stack.py`に追加する
-- [ ] T010 [P] `infrastructure/tests/unit/test_internal_proxy_secret.py` にLambda/ECSが同じ内部署名Secretを参照し、秘密値を通常環境変数・CloudFormation出力へ含めず、各実行ロールが対象Secretの`secretsmanager:GetSecretValue`だけを持つCDK assertionを追加して失敗を確認する
-- [ ] T011 `infrastructure/stacks/lambda_stack.py` と`infrastructure/stacks/ecs_stack.py` に既存`SystemActivity`テーブル名、クラスター名、サービス名、アイドル秒数、再試行上限、内部署名Secret ARN、非機密の署名key ID設定を渡し、Lambda/ECSロールへ対象Secretの読取だけを付与する
-- [ ] T012 `infrastructure/tests/unit/test_internal_proxy_secret.py` と`infrastructure/tests/unit/test_infrastructure_stack.py`を実行し、TTL、Secret参照、IAM最小権限、秘密値非露出を`specs/003-optimize-ecs-costs/validation-records.md`へ記録する
+- [X] T007 `specs/003-optimize-ecs-costs/data-model.md` の`global`項目と`request#{idempotencyKey}`項目について、既存`entityId`キーとの後方互換、初期値、ロック期限、成功完了+7日の期限、TTL削除待ちの置換、5分停滞回収、旧所有者の遅延確定拒否を実装可能な条件式まで最終確認する
+- [X] T008 [P] `specs/003-optimize-ecs-costs/contracts/runtime-api.md` の状態変更3ルート、`503 starting`、`409 processing`、7日保持、5分回収、内部署名、±60秒、最大2世代ローテーションをFR-004a〜FR-016へ対応付ける
+- [X] T009 [P] `infrastructure/stacks/database_stack.py` の既存`SystemActivity`テーブルへ`expiresAt`のTTL設定だけを追加し、専用テーブルや業務テーブル属性を増やさないCDK assertionを`infrastructure/tests/unit/test_infrastructure_stack.py`に追加する
+- [X] T010 [P] `infrastructure/tests/unit/test_internal_proxy_secret.py` にLambda/ECSが同じ内部署名Secretを参照し、秘密値を通常環境変数・CloudFormation出力へ含めず、各実行ロールが対象Secretの`secretsmanager:GetSecretValue`だけを持つCDK assertionを追加して失敗を確認する
+- [X] T011 `infrastructure/stacks/lambda_stack.py` と`infrastructure/stacks/ecs_stack.py` に既存`SystemActivity`テーブル名、クラスター名、サービス名、アイドル秒数、再試行上限、内部署名Secret ARN、非機密の署名key ID設定を渡し、Lambda/ECSロールへ対象Secretの読取だけを付与する
+- [X] T012 `infrastructure/tests/unit/test_internal_proxy_secret.py` と`infrastructure/tests/unit/test_infrastructure_stack.py`を実行し、TTL、Secret参照、IAM最小権限、秘密値非露出を`specs/003-optimize-ecs-costs/validation-records.md`へ記録する
 
 **Checkpoint**: 既存テーブル・API・秘密管理の境界が固定され、US1〜US4で別の制御基盤や実キー埋込みを作る必要がない。
 
@@ -55,22 +55,22 @@
 
 ### Tests for User Story 1（実装前に失敗確認）
 
-- [ ] T013 [P] [US1] NAT Gateway 0件、ECS DesiredCount 0、public subnet、AssignPublicIp ENABLED、ALB 0件を要求するCDK assertionを`infrastructure/tests/unit/test_ecs_cost_optimization.py`に追加して現行設定で失敗を確認する
-- [ ] T014 [P] [US1] canonical request、HMAC-SHA256、外部入力の`X-Internal-*`除去、メソッド・正規化パス/クエリ・本文ハッシュ・要求ID・冪等キー・時刻・key IDを署名するテストを`backend/lambda/tests/test_internal_request_signer.py`に追加して失敗を確認する
-- [ ] T015 [P] [US1] 正常署名、ヘッダー欠落、本文・パス・メソッド・要求ID・冪等キー改ざん、不正署名、不明key ID、時刻差-61/-60/+60/+61秒、定数時間比較、既存認証継続を`backend/ecs/tests/test_internal_request_verifier.py`に追加して失敗を確認する
-- [ ] T016 [P] [US1] 現行のみ、現行+次期、次期へLambda切替、旧秘密失効の各構成で最大2世代だけを検証し、3世代・失効key IDを拒否するテストを`backend/ecs/tests/test_internal_secret_rotation.py`に追加して失敗を確認する
-- [ ] T017 [P] [US1] 新規タスク起動、ECR pull、CloudWatch Logs出力、DynamoDBダミーread/write/delete、Geminiダミー解析を検証ID付きで記録する`scripts/validate-ecs-connectivity.ps1`を作成する
-- [ ] T018 [P] [US1] 署名欠落・改ざん・期限切れ・不明key ID・利用者認証違反と3段階秘密切替を秘密値非記録で検証する`scripts/validate-internal-proxy-signature.ps1`を作成する
+- [X] T013 [P] [US1] NAT Gateway 0件、ECS DesiredCount 0、public subnet、AssignPublicIp ENABLED、ALB 0件を要求するCDK assertionを`infrastructure/tests/unit/test_ecs_cost_optimization.py`に追加して現行設定で失敗を確認する
+- [X] T014 [P] [US1] canonical request、HMAC-SHA256、外部入力の`X-Internal-*`除去、メソッド・正規化パス/クエリ・本文ハッシュ・要求ID・冪等キー・時刻・key IDを署名するテストを`backend/lambda/tests/test_internal_request_signer.py`に追加して失敗を確認する
+- [X] T015 [P] [US1] 正常署名、ヘッダー欠落、本文・パス・メソッド・要求ID・冪等キー改ざん、不正署名、不明key ID、時刻差-61/-60/+60/+61秒、定数時間比較、既存認証継続を`backend/ecs/tests/test_internal_request_verifier.py`に追加して失敗を確認する
+- [X] T016 [P] [US1] 現行のみ、現行+次期、次期へLambda切替、旧秘密失効の各構成で最大2世代だけを検証し、3世代・失効key IDを拒否するテストを`backend/ecs/tests/test_internal_secret_rotation.py`に追加して失敗を確認する
+- [X] T017 [P] [US1] 新規タスク起動、ECR pull、CloudWatch Logs出力、DynamoDBダミーread/write/delete、Geminiダミー解析を検証ID付きで記録する`scripts/validate-ecs-connectivity.ps1`を作成する
+- [X] T018 [P] [US1] 署名欠落・改ざん・期限切れ・不明key ID・利用者認証違反と3段階秘密切替を秘密値非記録で検証する`scripts/validate-internal-proxy-signature.ps1`を作成する
 
 ### Implementation for User Story 1
 
-- [ ] T019 [US1] 既存VPCとFargate Service定義を維持したまま`nat_gateways=1`を`nat_gateways=0`、`desired_count=1`を`desired_count=0`へ修正する`infrastructure/stacks/ecs_stack.py`
-- [ ] T020 [P] [US1] Secrets Managerから指定key IDの1世代を取得しcanonical requestをHMAC-SHA256署名する`backend/lambda/src/services/internal_request_signer.py`を実装する
-- [ ] T021 [US1] 既存`proxy_to_ecs()`で外部入力の`X-Internal-*`を削除し、要求本文を一度だけ読み取り、要求ID・冪等キー・送信時刻・本文ハッシュ・key ID・署名を再生成して転送する`backend/lambda/src/main.py`
-- [ ] T022 [P] [US1] Secrets Managerから最大2世代を取得し、本文ハッシュ、時刻窓±60秒、key ID、HMACを定数時間比較で検証する`backend/ecs/src/services/internal_request_verifier.py`を実装する
-- [ ] T023 [US1] すべてのECS業務ルートで既存認証・認可より前に内部署名を検証し、欠落・不正・期限切れ・失効署名を業務処理前の`403`にする`backend/ecs/src/main.py`
-- [ ] T024 [P] [US1] 現行「NAT 1・常時1」と採用「NAT 0・初期0/利用時1」とEndpoint却下案を同一の価格基準日、東京リージョン、730時間、通信量、為替条件で比較し採否を`specs/003-optimize-ecs-costs/cost-estimate.md`に記録する
-- [ ] T025 [US1] `infrastructure/tests/unit/test_ecs_cost_optimization.py`、`infrastructure/tests/unit/test_internal_proxy_secret.py`、Lambda/ECS署名テスト、CDK synthを実行し、NAT 0、初期0、public IP、ALB 0、署名境界、秘密非露出を`specs/003-optimize-ecs-costs/validation-records.md`に記録する
+- [X] T019 [US1] 既存VPCとFargate Service定義を維持したまま`nat_gateways=1`を`nat_gateways=0`、`desired_count=1`を`desired_count=0`へ修正する`infrastructure/stacks/ecs_stack.py`
+- [X] T020 [P] [US1] Secrets Managerから指定key IDの1世代を取得しcanonical requestをHMAC-SHA256署名する`backend/lambda/src/services/internal_request_signer.py`を実装する
+- [X] T021 [US1] 既存`proxy_to_ecs()`で外部入力の`X-Internal-*`を削除し、要求本文を一度だけ読み取り、要求ID・冪等キー・送信時刻・本文ハッシュ・key ID・署名を再生成して転送する`backend/lambda/src/main.py`
+- [X] T022 [P] [US1] Secrets Managerから最大2世代を取得し、本文ハッシュ、時刻窓±60秒、key ID、HMACを定数時間比較で検証する`backend/ecs/src/services/internal_request_verifier.py`を実装する
+- [X] T023 [US1] すべてのECS業務ルートで既存認証・認可より前に内部署名を検証し、欠落・不正・期限切れ・失効署名を業務処理前の`403`にする`backend/ecs/src/main.py`
+- [X] T024 [P] [US1] 現行「NAT 1・常時1」と採用「NAT 0・初期0/利用時1」とEndpoint却下案を同一の価格基準日、東京リージョン、730時間、通信量、為替条件で比較し採否を`specs/003-optimize-ecs-costs/cost-estimate.md`に記録する
+- [X] T025 [US1] `infrastructure/tests/unit/test_ecs_cost_optimization.py`、`infrastructure/tests/unit/test_internal_proxy_secret.py`、Lambda/ECS署名テスト、CDK synthを実行し、NAT 0、初期0、public IP、ALB 0、署名境界、秘密非露出を`specs/003-optimize-ecs-costs/validation-records.md`に記録する
 - [ ] T026 [US1] 検証環境で`scripts/validate-ecs-connectivity.ps1`を実行し、デプロイ直後desired/running 0と新規タスクからの4通信を`specs/003-optimize-ecs-costs/validation-records.md`に記録する
 - [ ] T027 [US1] 検証環境で`scripts/validate-internal-proxy-signature.ps1`をECSへ次期秘密追加、Lambdaを次期へ切替、ECSから旧秘密失効の順に実行し、各段階の正当転送100%成功、旧秘密失効後100%拒否、業務書込み0件を`specs/003-optimize-ecs-costs/validation-records.md`に記録する
 
@@ -86,26 +86,26 @@
 
 ### Tests for User Story 2（実装前に失敗確認）
 
-- [ ] T028 [P] [US2] 既存`proxy_to_ecs()`が停止時に既存`ensure_ecs_running()`を1回呼び、`503`、`Retry-After`、`status=starting`、`Cache-Control=no-store`を返して通常503と区別できるテストを`backend/lambda/tests/test_lambda_ecs_proxy.py`に追加して失敗を確認する
-- [ ] T029 [P] [US2] 冪等要求の新規取得、同一内容処理中、成功結果再利用、内容競合、成功完了から7日直前の再利用、7日経過後かつTTL物理削除前の新規取得を`backend/ecs/tests/test_idempotency_service.py`に追加して失敗を確認する
-- [ ] T030 [US2] `PROCESSING`取得から5分未満の回収拒否、5分以上かつ成功未確定の回収、成功済み回収拒否、同時回収1件、旧`ownerRequestId`・旧`startedAt`条件を`backend/ecs/tests/test_idempotency_service.py`に追加して失敗を確認する
-- [ ] T031 [P] [US2] 同一`Idempotency-Key`の登録・返却・ステータス更新を複数回送って業務書込みが1回、成功再利用、内容競合が業務変更なしの`409`となる契約テストを`backend/ecs/tests/test_idempotent_pc_operations.py`に追加して失敗を確認する
-- [ ] T032 [US2] 登録、返却、ステータス更新について業務項目、履歴項目、冪等成功記録を項目ごとに失敗させて部分成功0件とし、5分回収後の旧所有者トランザクションが業務変更なしで失敗するテストを`backend/ecs/tests/test_idempotent_pc_transactions.py`に追加して失敗を確認する
+- [X] T028 [P] [US2] 既存`proxy_to_ecs()`が停止時に既存`ensure_ecs_running()`を1回呼び、`503`、`Retry-After`、`status=starting`、`Cache-Control=no-store`を返して通常503と区別できるテストを`backend/lambda/tests/test_lambda_ecs_proxy.py`に追加して失敗を確認する
+- [X] T029 [P] [US2] 冪等要求の新規取得、同一内容処理中、成功結果再利用、内容競合、成功完了から7日直前の再利用、7日経過後かつTTL物理削除前の新規取得を`backend/ecs/tests/test_idempotency_service.py`に追加して失敗を確認する
+- [X] T030 [US2] `PROCESSING`取得から5分未満の回収拒否、5分以上かつ成功未確定の回収、成功済み回収拒否、同時回収1件、旧`ownerRequestId`・旧`startedAt`条件を`backend/ecs/tests/test_idempotency_service.py`に追加して失敗を確認する
+- [X] T031 [P] [US2] 同一`Idempotency-Key`の登録・返却・ステータス更新を複数回送って業務書込みが1回、成功再利用、内容競合が業務変更なしの`409`となる契約テストを`backend/ecs/tests/test_idempotent_pc_operations.py`に追加して失敗を確認する
+- [X] T032 [US2] 登録、返却、ステータス更新について業務項目、履歴項目、冪等成功記録を項目ごとに失敗させて部分成功0件とし、5分回収後の旧所有者トランザクションが業務変更なしで失敗するテストを`backend/ecs/tests/test_idempotent_pc_transactions.py`に追加して失敗を確認する
 
 ### Implementation for User Story 2
 
-- [ ] T033 [US2] 既存`proxy_to_ecs()`の停止時分岐を拡張し、既存`ensure_ecs_running()`を使ったまま要求ID、機械判定可能な起動中本文、`Retry-After`、`Cache-Control=no-store`を返す`backend/lambda/src/main.py`
-- [ ] T034 [US2] `SystemActivity`の`request#{idempotencyKey}`を使い、fingerprint、条件付き処理権取得、処理中応答、成功結果再利用、内容競合、成功+7日判定、TTL削除待ち置換、5分停滞回収を共通化する`backend/ecs/src/services/idempotency_service.py`
-- [ ] T035 [US2] 登録・返却・ステータス更新で`Idempotency-Key`を必須化し、内部署名検証と既存認証・認可後かつ業務処理前に共通冪等ガードを適用し、`POST /api/pcs/parse-specs`を保存対象外とする`backend/ecs/src/main.py`
-- [ ] T036 [US2] 既存PC登録を低レベルDynamoDB clientの`TransactWriteItems`へ最小変更し、PC Put、必要な既存履歴Put、所有者・開始時刻条件付き冪等成功更新を同時確定する`backend/ecs/src/services/pc_service.py`
-- [ ] T037 [US2] 既存PC返却を`TransactWriteItems`へ最小変更し、返却記録Put、PC状態Update、必要な既存履歴Put、所有者・開始時刻条件付き冪等成功更新を同時確定する`backend/ecs/src/services/pc_service.py`
-- [ ] T038 [US2] 既存PCステータス更新を`TransactWriteItems`へ最小変更し、PC状態Update、既存履歴Put、所有者・開始時刻条件付き冪等成功更新を同時確定する`backend/ecs/src/main.py`
-- [ ] T039 [US2] UUID形式の要求識別値を利用者操作ごとに1回生成し、同じメソッド・URL・本文・キーを`503 starting`または`409 processing`の`Retry-After`に従って最大180秒再送する共通処理へ既存`getPCs()`、`registerPC()`、`returnPC()`を統合する`frontend/src/services/pc-api.ts`
-- [ ] T040 [P] [US2] 既存`ECSLoadingState`と`useECSLoadingState`を、起動中、残り待機時間、180秒超過、キャンセル、安全な再試行を表示できるよう拡張する`frontend/src/components/ecs-loading-state.tsx`と`frontend/src/components/ecs-loading-state.css`
-- [ ] T041 [US2] 既存の直接fetchを`getPCs()`へ置き換え、ECS起動待ちだけ既存`ECSLoadingState`を表示し通常エラーを維持する`frontend/src/app/pcs/page.tsx`
-- [ ] T042 [US2] 既存の連打抑止を維持しつつ、登録操作の同一キー再送、起動待ち表示、3分超過後の安全な再試行を接続する`frontend/src/app/pcs/register/page.tsx`
-- [ ] T043 [US2] 既存の直接fetchを`returnPC()`へ置き換え、送信中の連打抑止、同一キー再送、起動待ち表示、成功後処理を接続する`frontend/src/app/pcs/[pcId]/return/page.tsx`
-- [ ] T044 [US2] 冪等サービス、状態変更契約、トランザクション、Lambdaプロキシのテストとフロントエンド型検査・buildを実行し、7日境界、5分回収、旧所有者拒否、部分成功0件を`specs/003-optimize-ecs-costs/validation-records.md`に記録する
+- [X] T033 [US2] 既存`proxy_to_ecs()`の停止時分岐を拡張し、既存`ensure_ecs_running()`を使ったまま要求ID、機械判定可能な起動中本文、`Retry-After`、`Cache-Control=no-store`を返す`backend/lambda/src/main.py`
+- [X] T034 [US2] `SystemActivity`の`request#{idempotencyKey}`を使い、fingerprint、条件付き処理権取得、処理中応答、成功結果再利用、内容競合、成功+7日判定、TTL削除待ち置換、5分停滞回収を共通化する`backend/ecs/src/services/idempotency_service.py`
+- [X] T035 [US2] 登録・返却・ステータス更新で`Idempotency-Key`を必須化し、内部署名検証と既存認証・認可後かつ業務処理前に共通冪等ガードを適用し、`POST /api/pcs/parse-specs`を保存対象外とする`backend/ecs/src/main.py`
+- [X] T036 [US2] 既存PC登録を低レベルDynamoDB clientの`TransactWriteItems`へ最小変更し、PC Put、必要な既存履歴Put、所有者・開始時刻条件付き冪等成功更新を同時確定する`backend/ecs/src/services/pc_service.py`
+- [X] T037 [US2] 既存PC返却を`TransactWriteItems`へ最小変更し、返却記録Put、PC状態Update、必要な既存履歴Put、所有者・開始時刻条件付き冪等成功更新を同時確定する`backend/ecs/src/services/pc_service.py`
+- [X] T038 [US2] 既存PCステータス更新を`TransactWriteItems`へ最小変更し、PC状態Update、既存履歴Put、所有者・開始時刻条件付き冪等成功更新を同時確定する`backend/ecs/src/main.py`
+- [X] T039 [US2] UUID形式の要求識別値を利用者操作ごとに1回生成し、同じメソッド・URL・本文・キーを`503 starting`または`409 processing`の`Retry-After`に従って最大180秒再送する共通処理へ既存`getPCs()`、`registerPC()`、`returnPC()`を統合する`frontend/src/services/pc-api.ts`
+- [X] T040 [P] [US2] 既存`ECSLoadingState`と`useECSLoadingState`を、起動中、残り待機時間、180秒超過、キャンセル、安全な再試行を表示できるよう拡張する`frontend/src/components/ecs-loading-state.tsx`と`frontend/src/components/ecs-loading-state.css`
+- [X] T041 [US2] 既存の直接fetchを`getPCs()`へ置き換え、ECS起動待ちだけ既存`ECSLoadingState`を表示し通常エラーを維持する`frontend/src/app/pcs/page.tsx`
+- [X] T042 [US2] 既存の連打抑止を維持しつつ、登録操作の同一キー再送、起動待ち表示、3分超過後の安全な再試行を接続する`frontend/src/app/pcs/register/page.tsx`
+- [X] T043 [US2] 既存の直接fetchを`returnPC()`へ置き換え、送信中の連打抑止、同一キー再送、起動待ち表示、成功後処理を接続する`frontend/src/app/pcs/[pcId]/return/page.tsx`
+- [X] T044 [US2] 冪等サービス、状態変更契約、トランザクション、Lambdaプロキシのテストとフロントエンド型検査・buildを実行し、7日境界、5分回収、旧所有者拒否、部分成功0件を`specs/003-optimize-ecs-costs/validation-records.md`に記録する
 - [ ] T045 [US2] 停止状態からPC一覧・登録・返却を各5回、登録・返却を自動再送込みで各10回、ステータス更新の重複試験を実施し、3分以内完了、同一キー維持、業務結果重複0件を`specs/003-optimize-ecs-costs/validation-records.md`に記録する
 
 **Checkpoint**: US2単独で、停止中からの利用再開と全状態変更ルートの原子的な一回処理を検証できる。

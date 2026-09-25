@@ -26,6 +26,9 @@ class LambdaStack(Stack):
         azure_ad_secrets = secretsmanager.Secret.from_secret_name_v2(
             self, "AzureAdSecrets", "AzureAdSecrets"
         )
+        internal_proxy_secret = secretsmanager.Secret.from_secret_name_v2(
+            self, "InternalProxySecret", "InternalProxySigningSecret"
+        )
 
         # Lambda関数を作成
         # プロジェクトルートからのパスを解決
@@ -43,11 +46,19 @@ class LambdaStack(Stack):
                 "USERS_TABLE_NAME": users_table.table_name if users_table else "Users",
                 "PCS_TABLE_NAME": pcs_table.table_name if pcs_table else "PCs",
                 "AZURE_AD_SECRET_NAME": "AzureAdSecrets",
+                "SYSTEM_ACTIVITY_TABLE_NAME": system_activity_table.table_name if system_activity_table else "SystemActivity",
+                "ECS_CLUSTER_NAME": "PCManagementCluster",
+                "ECS_SERVICE_NAME": "PCManagementService",
+                "IDLE_TIMEOUT_SECONDS": "7200",
+                "RETRY_MAX_SECONDS": "180",
+                "INTERNAL_PROXY_SECRET_ARN": internal_proxy_secret.secret_arn,
+                "INTERNAL_PROXY_KEY_ID": "current",
             }
         )
 
         # シークレットへの読み取り権限を追加
         azure_ad_secrets.grant_read(api_lambda)
+        internal_proxy_secret.grant_read(api_lambda)
 
         # DynamoDBへのアクセス権限を追加
         if users_table:
@@ -127,6 +138,12 @@ class LambdaStack(Stack):
             handler="lambda_handler_cloudwatch_timeout_check",
             runtime=_lambda.Runtime.PYTHON_3_9,
             timeout=Duration.seconds(30),
+            environment={
+                "SYSTEM_ACTIVITY_TABLE_NAME": system_activity_table.table_name if system_activity_table else "SystemActivity",
+                "ECS_CLUSTER_NAME": "PCManagementCluster",
+                "ECS_SERVICE_NAME": "PCManagementService",
+                "IDLE_TIMEOUT_SECONDS": "7200",
+            },
         )
 
         # IAM権限の付与

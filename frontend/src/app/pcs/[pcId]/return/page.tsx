@@ -7,6 +7,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useSession } from 'next-auth/react';
+import ECSLoadingState, { useECSLoadingState } from '@/components/ecs-loading-state';
+import { returnPC } from '@/services/pc-api';
 
 // 型定義 (実際のプロジェクトに合わせて調整が必要な場合があります)
 interface ReturnFormData {
@@ -16,6 +19,8 @@ interface ReturnFormData {
 
 export default function ReturnPage() {
   const params = useParams();
+  const { data: session } = useSession();
+  const ecsLoading = useECSLoadingState();
   // URLパラメータからPC IDを取得
   const pcId = params?.pcId as string;
 
@@ -43,24 +48,17 @@ export default function ReturnPage() {
 
     try {
       // T034で実装したAPIエンドポイントを呼び出す
-      const response = await fetch(`/api/pcs/${pcId}/return`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      const data = await returnPC(pcId, {
+        userId: session?.user?.id || '',
+        returnReason: formData.returnReason,
+        pcStatusAtReturn: formData.pcStatusAtReturn,
+      }, {
+        onRetryStateChange: (retry) => {
+          ecsLoading.setStatus(retry.status === 'idle' ? 'starting' : retry.status);
+          ecsLoading.setRemainingSeconds(retry.remainingSeconds);
+          ecsLoading.setIsLoading(retry.status !== 'idle');
         },
-        body: JSON.stringify({
-          userId: 'CURRENT_USER_ID', // 実際には認証情報から取得する
-          returnReason: formData.returnReason,
-          pcStatusAtReturn: formData.pcStatusAtReturn,
-        }),
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || '返却処理に失敗しました。');
-      }
-
-      const data = await response.json();
       setMessage({ type: 'success', text: data.message || '返却処理が正常に完了しました。' });
       // フォームをリセット
       setFormData({ returnReason: '', pcStatusAtReturn: '' });
@@ -74,6 +72,12 @@ export default function ReturnPage() {
   };
 
   return (
+    <>
+    <ECSLoadingState
+      isLoading={ecsLoading.isLoading}
+      status={ecsLoading.status}
+      remainingSeconds={ecsLoading.remainingSeconds}
+    />
     <div className="container mx-auto py-12 max-w-xl">
       <Card>
         <CardHeader>
@@ -128,5 +132,6 @@ export default function ReturnPage() {
         </CardContent>
       </Card>
     </div>
+    </>
   );
 }

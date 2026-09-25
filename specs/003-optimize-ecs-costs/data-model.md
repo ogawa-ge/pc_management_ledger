@@ -61,6 +61,13 @@ STOPPED <----- deploy / idle stop ----- STOPPING
 4. **Stop cancellation/restart**: `STOPPING` 中の新規操作は `generation` を増やして `STARTING` とし、停止API実行後の世代再確認でも新世代を検出した場合は `desiredCount=1` を再適用する。
 5. **Completion**: 2xx応答の成功完了時だけ `lastActivityAt` を更新する。4xx/5xx/通信失敗は更新しないが `inFlightCount` は必ず減らす。
 
+### Initial values and conditional updates
+
+- `global`が存在しない場合は、最初の有効操作または定期判定で`runtimeState=STOPPED`、`generation=0`、`inFlightCount=0`、`lastStateChangedAt=now`として作成する。既存の`entityId=global`に`lastActivityAt`しかない場合は項目を削除せず、不足属性を`if_not_exists`で補完する。
+- 起動所有権取得は概念的に`SET runtimeState=:starting, generation=if_not_exists(generation,:zero)+:one, startOwnerRequestId=:owner, startRequestedAt=:now, startLockExpiresAt=:lockExpiry`を行い、`attribute_not_exists(runtimeState) OR runtimeState IN (STOPPED, START_FAILED) OR startLockExpiresAt <= :nowEpoch`を条件とする。
+- 起動成功・失敗の確定は`startOwnerRequestId=:owner AND generation=:generation AND runtimeState=:starting`を条件とし、旧所有者による遅延更新を拒否する。
+- 停止所有権取得は`runtimeState=:running AND generation=:generation AND inFlightCount=:zero AND lastActivityAt<=:idleBoundary`を条件とする。
+
 ## 3. Idempotent Request（冪等要求）
 
 **保存先**: `SystemActivity` / `entityId = "request#{idempotencyKey}"`
@@ -90,6 +97,14 @@ STOPPED <----- deploy / idle stop ----- STOPPING
 - `SUCCEEDED` の`expiresAt`は`completedAt + 7 days`とする。保持期間中は同じ成功結果を返し、期限後はTTL削除待ちでも条件付きで新しい`PROCESSING`へ置換して新規要求として扱う。
 - `responseBody` はDynamoDB項目上限を考慮し、PC一覧等の大きなGET応答は保存しない。状態変更の小さな成功応答だけを対象とする。
 - TTL削除は即時ではないため、`expiresAt <= now` の項目はアプリケーション側でも期限切れとして扱う。
+
+### DynamoDB conditional expressions
+
+- **新規取得**: `attribute_not_exists(entityId)`。
+- **期限切れ成功結果の置換**: `status = :succeeded AND expiresAt <= :now AND requestFingerprint = :fingerprint`。置換時は`ownerRequestId`、`startedAt`、`status=PROCESSING`を新しい値へ更新し、成功レスポンス属性を削除する。
+- **5分停滞回収**: `status = :processing AND requestFingerprint = :fingerprint AND ownerRequestId = :oldOwner AND startedAt = :oldStartedAt AND startedAt <= :staleBoundary AND attribute_not_exists(completedAt)`。
+- **成功確定トランザクション**: `status = :processing AND ownerRequestId = :owner AND startedAt = :startedAt`を冪等項目更新の条件とし、業務書込みと同じ`TransactWriteItems`に含める。
+- **成功期限**: `expiresAt = completedAt(epoch seconds) + 604800`。`expiresAt`は`request#`項目だけで利用し、`global`項目には設定しない。
 
 ### State transitions
 

@@ -28,6 +28,7 @@ aws --version
 ### 2.1 Lambda/ECS/CDK tests
 
 実装後に追加されるテストを含め、外部Gemini実通信を要求しないテストだけを通常ゲートとして実行する。
+`backend/lambda/tests` はLambda固有のテスト、`backend/ecs/tests` はECS API固有のテスト、`infrastructure/tests` はCDK assertionの実在パスである。
 
 ```powershell
 Set-Location 'D:\workspace\pc_management_ledger'

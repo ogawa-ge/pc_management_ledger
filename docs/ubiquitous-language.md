@@ -53,5 +53,17 @@ PCの現在の状態を表します。（`status` カラムの値）
 | **Terminal** | ターミナル | ユーザーがPCのスペック情報を取得するためのコマンドを実行するインターフェース。 |
 | **Proxy Registration** | 代理登録 | 管理者が特定のユーザーを指定して、そのユーザーの代わりにPCを登録すること。 |
 
+## 6. ECSランタイム制御・安全性関連 (Runtime Control & Safety)
+
+| 用語 (English) | 日本語訳 | 定義・説明 | コード表記 |
+| :--- | :--- | :--- | :--- |
+| **Backend Runtime State** | バックエンド稼働状態 | ECSバックエンドの停止中、起動中、稼働中、停止処理中、起動失敗を区別する状態。DynamoDB上の状態だけでなくECSの実状態と照合して扱う。 | `runtimeState`: `STOPPED`, `STARTING`, `RUNNING`, `STOPPING`, `START_FAILED` |
+| **Start Lock** | 起動ロック | 同時に到着した起動要求のうち、1要求だけへECSの稼働数更新権を与える期限付きの排他情報。取得できない要求は起動失敗ではなく進行中の状態を共有する。 | `startOwnerRequestId`, `startLockExpiresAt`, `startRequestedAt` |
+| **Idempotency Key** | 冪等キー | 利用者の1回の状態変更操作を再送間で識別し、同じ内容を一度だけ成立させるUUID形式の値。異なる内容での再利用は競合として拒否する。 | HTTP `Idempotency-Key`, `request#{idempotencyKey}` |
+| **In-flight Operation** | 処理中操作 | LambdaがECSへ転送を開始し、成功・失敗・例外のいずれでも終了していない操作。1件以上存在する間は自動停止しない。 | `inFlightCount` |
+| **Runtime Generation** | 稼働世代 | 起動・停止と新規操作の競合を検出する単調増加番号。停止処理後に世代が変化していれば、新しい操作を優先して再起動する。 | `generation` |
+| **Internal Request Signature** | 内部要求署名 | Lambdaから公開IPのECSへ転送する要求について、メソッド、正規化URL、本文、要求ID、冪等キー、送信時刻、秘密世代をHMAC-SHA256で保護する署名。利用者認証・認可を代替しない。 | `X-Internal-Signature` および関連する `X-Internal-*` ヘッダー |
+| **Secret Generation** | 秘密世代 | 内部要求署名用共有秘密のローテーション単位。Lambdaは現行1世代で署名し、ECSは移行中だけ現行・次期の最大2世代を検証する。 | `keyId`, `current`, `next` |
+
 ---
 ※ 新しい用語や概念が登場した場合は、実装前に必ずこのドキュメントを更新し、チーム全体（AI含む）で認識を同期させてください。
