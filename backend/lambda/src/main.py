@@ -76,14 +76,15 @@ async def proxy_to_ecs(path: str, request: Request):
     資産管理 API (/api/pcs/* 等) へのリクエストを ECS (Fargate) にプロキシ転送します。
     ECS がスリープ中の場合は、自動起動をトリガーして 503 (Retry-After) を返します。
     """
-    # 1. ECSManager で ECS の起動確認と IP 取得
+    # 1. 受付を記録し、ECSManager で ECS の起動確認と IP 取得
     ecs_manager = get_ecs_manager()
+    proxy_request_id = str(uuid.uuid4())
+    ecs_manager.record_request_accepted(proxy_request_id)
+    ecs_manager.ensure_ecs_running(request_id=proxy_request_id)
     public_ip = ecs_manager.get_ecs_public_ip()
     
     if not public_ip:
         # ECS が起動していない場合は起動プロセスをバックグラウンドで開始
-        ecs_manager.ensure_ecs_running()
-        
         # HTTP 503 を返して、フロントエンドに再試行を促す
         return JSONResponse(
             status_code=503,
@@ -116,7 +117,7 @@ async def proxy_to_ecs(path: str, request: Request):
     body = await request.body()
     idempotency_key = headers.get("idempotency-key") or str(uuid.uuid4())
     headers["Idempotency-Key"] = idempotency_key
-    internal_request_id = str(uuid.uuid4())
+    internal_request_id = proxy_request_id
     signer = InternalRequestSigner()
     headers.update(
         signer.sign(
@@ -130,7 +131,10 @@ async def proxy_to_ecs(path: str, request: Request):
     
     # HTTP クライアント (urllib3) でリクエストを送信
     http = urllib3.PoolManager()
+    in_flight_started = False
     try:
+        ecs_manager.begin_in_flight()
+        in_flight_started = True
         ecs_response = http.request(
             method=method,
             url=target_url,
@@ -160,6 +164,10 @@ async def proxy_to_ecs(path: str, request: Request):
                 "message": f"Failed to forward request to ECS: {str(e)}"
             }
         )
+    finally:
+        if in_flight_started:
+            succeeded = "ecs_response" in locals() and 200 <= ecs_response.status < 300
+            ecs_manager.finish_in_flight(succeeded=succeeded)
 
 def lambda_handler(event, context):
     # FastAPIアプリケーションをLambda用にラップ

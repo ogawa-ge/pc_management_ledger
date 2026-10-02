@@ -120,17 +120,17 @@
 
 ### Tests for User Story 3（実装前に失敗確認）
 
-- [ ] T046 [P] [US3] 実`ECSManager`に10件の同時起動要求を与え、条件付きロック取得1件、ロック非取得9件、`update_service(desiredCount=1)` 1回、全要求がstarting/runningを返すテストを`backend/lambda/tests/test_ecs_manager.py`に追加して失敗を確認する
-- [ ] T047 [US3] 起動ロック期限切れ回復、所有者だけの起動成功・失敗状態更新、ECS実状態との再照合を`backend/lambda/tests/test_ecs_manager.py`に追加して失敗を確認する
-- [ ] T048 [P] [US3] 停止所有権取得前の新規世代で停止中止、`desiredCount=0`実行後の新規世代で`desiredCount=1`再適用となる競合テストを`backend/lambda/tests/test_ecs_stop_race.py`に追加して失敗を確認する
+- [X] T046 [P] [US3] 実`ECSManager`に10件の同時起動要求を与え、条件付きロック取得1件、ロック非取得9件、`update_service(desiredCount=1)` 1回、全要求がstarting/runningを返すテストを`backend/lambda/tests/test_ecs_manager.py`に追加して失敗を確認する
+- [X] T047 [US3] 起動ロック期限切れ回復、所有者だけの起動成功・失敗状態更新、ECS実状態との再照合を`backend/lambda/tests/test_ecs_manager.py`に追加して失敗を確認する
+- [X] T048 [P] [US3] 停止所有権取得前の新規世代で停止中止、`desiredCount=0`実行後の新規世代で`desiredCount=1`再適用となる競合テストを`backend/lambda/tests/test_ecs_stop_race.py`に追加して失敗を確認する
 
 ### Implementation for User Story 3
 
-- [ ] T049 [US3] 既存`ensure_ecs_running()` / `start_ecs()`に`SystemActivity`の状態・世代・所有者・期限を使う条件付き起動ロックを追加し、所有者だけが既存`update_service(desiredCount=1)`を呼ぶ`backend/lambda/src/services/ecs_manager.py`
-- [ ] T050 [US3] ロック非取得側が既存`get_ecs_status()`で起動中または稼働中を返し、期限切れロックと起動失敗を実ECS状態から回復する`backend/lambda/src/services/ecs_manager.py`
-- [ ] T051 [US3] 新規操作受付時に世代を進め、停止所有権取得前なら停止中止、既存停止更新後なら既存`ensure_ecs_running()`で再起動する競合処理を`backend/lambda/src/services/ecs_manager.py`と`backend/lambda/src/main.py`へ統合する
-- [ ] T052 [P] [US3] 停止状態へ10件を同時送信し、起動更新回数、各応答、最終desired/running数を確認する`scripts/validate-concurrent-start.ps1`を作成する
-- [ ] T053 [US3] 起動・停止競合テストを実行し、同時10件と停止前後の競合結果を`specs/003-optimize-ecs-costs/validation-records.md`に記録する
+- [X] T049 [US3] 既存`ensure_ecs_running()` / `start_ecs()`に`SystemActivity`の状態・世代・所有者・期限を使う条件付き起動ロックを追加し、所有者だけが既存`update_service(desiredCount=1)`を呼ぶ`backend/lambda/src/services/ecs_manager.py`
+- [X] T050 [US3] ロック非取得側が既存`get_ecs_status()`で起動中または稼働中を返し、期限切れロックと起動失敗を実ECS状態から回復する`backend/lambda/src/services/ecs_manager.py`
+- [X] T051 [US3] 新規操作受付時に世代を進め、停止所有権取得前なら停止中止、既存停止更新後なら既存`ensure_ecs_running()`で再起動する競合処理を`backend/lambda/src/services/ecs_manager.py`と`backend/lambda/src/main.py`へ統合する
+- [X] T052 [P] [US3] 停止状態へ10件を同時送信し、起動更新回数、各応答、最終desired/running数を確認する`scripts/validate-concurrent-start.ps1`を作成する
+- [X] T053 [US3] 起動・停止競合テストを実行し、同時10件と停止前後の競合結果を`specs/003-optimize-ecs-costs/validation-records.md`に記録する
 - [ ] T054 [US3] 検証環境で`scripts/validate-concurrent-start.ps1`と停止競合シナリオを実行し、起動更新1回、最終稼働数1、元操作一回成功を`specs/003-optimize-ecs-costs/validation-records.md`に記録する
 
 **Checkpoint**: US3単独で、複数Lambda実行環境を想定した起動集約と停止競合からの要求回復を検証できる。
@@ -145,17 +145,17 @@
 
 ### Tests for User Story 4（実装前に失敗確認）
 
-- [ ] T055 [P] [US4] プロキシ受付時の`lastAcceptedAt`、転送前の`inFlightCount += 1`、2xx完了時の`lastActivityAt`、全終了経路の減算を`backend/lambda/tests/test_lambda_activity_tracking.py`に追加して失敗を確認する
-- [ ] T056 [P] [US4] 2時間未満・境界・超過、処理中、`lastActivityAt`と`inFlightCount`の欠損・不正・未来・負数を与え、停止せず`invalid_runtime_activity`監査ログを出すテストを`backend/lambda/tests/test_ecs_manager.py`に追加して失敗を確認する
-- [ ] T057 [P] [US4] 既存EventBridgeルールが15分間隔で既存停止判定Lambdaを呼ぶCDK assertionを`infrastructure/tests/unit/test_ecs_idle_schedule.py`に追加して失敗を確認する
+- [X] T055 [P] [US4] プロキシ受付時の`lastAcceptedAt`、転送前の`inFlightCount += 1`、2xx完了時の`lastActivityAt`、全終了経路の減算を`backend/lambda/tests/test_lambda_activity_tracking.py`に追加して失敗を確認する
+- [X] T056 [P] [US4] 2時間未満・境界・超過、処理中、`lastActivityAt`と`inFlightCount`の欠損・不正・未来・負数を与え、停止せず`invalid_runtime_activity`監査ログを出すテストを`backend/lambda/tests/test_ecs_manager.py`に追加して失敗を確認する
+- [X] T057 [P] [US4] 既存EventBridgeルールが15分間隔で既存停止判定Lambdaを呼ぶCDK assertionを`infrastructure/tests/unit/test_ecs_idle_schedule.py`に追加して失敗を確認する
 
 ### Implementation for User Story 4
 
-- [ ] T058 [US4] 既存`proxy_to_ecs()`に受付時刻更新、転送直前の処理中件数加算、2xx成功完了時刻更新、例外を含む全終了経路の安全な減算を追加する`backend/lambda/src/main.py`
-- [ ] T059 [US4] 既存`check_and_auto_sleep()`と定期判定ハンドラーを、2時間経過、処理中0、正常時刻、世代不変でだけ既存`stop_ecs()`を呼び、異常時は秘密情報なしの構造化監査ログを残す`backend/lambda/src/services/ecs_manager.py`
-- [ ] T060 [US4] 既存`EcsTimeoutCheckRule`を1時間から15分へ変更し、既存停止判定Lambdaへテーブル名・アイドル秒数を渡す`infrastructure/stacks/lambda_stack.py`
-- [ ] T061 [P] [US4] 2時間境界、処理中、異常記録、停止後desired/running 0を安全に再現する`scripts/validate-idle-sleep.ps1`を作成する
-- [ ] T062 [US4] 活動追跡、停止判定、CDKスケジュールのテストを実行し、結果を`specs/003-optimize-ecs-costs/validation-records.md`に記録する
+- [X] T058 [US4] 既存`proxy_to_ecs()`に受付時刻更新、転送直前の処理中件数加算、2xx成功完了時刻更新、例外を含む全終了経路の安全な減算を追加する`backend/lambda/src/main.py`
+- [X] T059 [US4] 既存`check_and_auto_sleep()`と定期判定ハンドラーを、2時間経過、処理中0、正常時刻、世代不変でだけ既存`stop_ecs()`を呼び、異常時は秘密情報なしの構造化監査ログを残す`backend/lambda/src/services/ecs_manager.py`
+- [X] T060 [US4] 既存`EcsTimeoutCheckRule`を1時間から15分へ変更し、既存停止判定Lambdaへテーブル名・アイドル秒数を渡す`infrastructure/stacks/lambda_stack.py`
+- [X] T061 [P] [US4] 2時間境界、処理中、異常記録、停止後desired/running 0を安全に再現する`scripts/validate-idle-sleep.ps1`を作成する
+- [X] T062 [US4] 活動追跡、停止判定、CDKスケジュールのテストを実行し、結果を`specs/003-optimize-ecs-costs/validation-records.md`に記録する
 - [ ] T063 [US4] 検証環境で`scripts/validate-idle-sleep.ps1`を実行し、処理中停止0件、異常時fail-open、アイドル成立後15分以内のdesired/running 0を`specs/003-optimize-ecs-costs/validation-records.md`に記録する
 
 **Checkpoint**: US4単独で、001由来の2時間自動停止が処理中操作を壊さず待機費0へ戻ることを検証できる。
@@ -170,7 +170,7 @@
 
 ### Implementation for User Story 5
 
-- [ ] T064 [P] [US5] `specs/003-optimize-ecs-costs/contracts/cost-evaluation.md`をFR-005・FR-019とSC-008・SC-009へ同期し、実績比較の入力元と差率式を確認する
+- [X] T064 [P] [US5] `specs/003-optimize-ecs-costs/contracts/cost-evaluation.md`をFR-005・FR-019とSC-008・SC-009へ同期し、実績比較の入力元と差率式を確認する
 - [ ] T065 [US5] 導入後30日または最初の完全請求期間の主要費用項目を同一条件へ揃え、実績、差額、差率、原因候補を`specs/003-optimize-ecs-costs/cost-actual-review.md`に記録する
 - [ ] T066 [US5] 月額3,000円超過または見積り20%超過の有無、再評価要否、対応責任者、期限、次回確認日を`specs/003-optimize-ecs-costs/cost-actual-review.md`に記録する
 - [ ] T067 [US5] US5の費用証跡参照と最終判断を、秘密情報やAWSアカウントIDを除いて`specs/003-optimize-ecs-costs/validation-records.md`に追記する
@@ -184,7 +184,7 @@
 **Purpose**: 001の既存機能を壊していないことと、003の全成功基準をまとめて検証する。
 
 - [ ] T068 [P] 既存の認証・認可、PC一覧、PC登録、PC返却、ステータス更新、Gemini解析テストを実行し、回帰結果を`specs/003-optimize-ecs-costs/validation-records.md`に記録する
-- [ ] T069 [P] `backend/lambda/tests`、外部Gemini実通信を除く`backend/ecs/tests`、`infrastructure/tests`、フロントエンド`npx tsc --noEmit`と`npm run build`、CDK synthを`specs/003-optimize-ecs-costs/quickstart.md`に従って実行する
+- [X] T069 [P] `backend/lambda/tests`、外部Gemini実通信を除く`backend/ecs/tests`、`infrastructure/tests`、フロントエンド`npx tsc --noEmit`と`npm run build`、CDK synthを`specs/003-optimize-ecs-costs/quickstart.md`に従って実行する
 - [ ] T070 FR-001〜FR-019とSC-001〜SC-009について、既存証跡を要件へマッピングし、不足分だけを再試験して`specs/003-optimize-ecs-costs/validation-records.md`に最終整理する
 - [ ] T071 内部署名、±60秒境界、利用者認証併用、最大2世代・3段階ローテーション、7日境界、5分回収、旧所有者拒否、状態変更3ルート、部分成功0件のSecurity First証跡を`specs/003-optimize-ecs-costs/validation-records.md`で最終監査する
 - [ ] T072 `specs/003-optimize-ecs-costs/quickstart.md`を通しで再実行し、既知制約、未実施の実環境項目、再実施手順を`specs/003-optimize-ecs-costs/validation-records.md`に記録する

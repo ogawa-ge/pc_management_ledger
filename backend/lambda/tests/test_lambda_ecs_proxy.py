@@ -23,4 +23,7 @@ def test_stopped_ecs_returns_machine_readable_starting_response(monkeypatch):
     assert response.json()["status"] == "starting"
     assert response.headers["Retry-After"] == "15"
     assert response.headers["Cache-Control"] == "no-store"
-    manager.ensure_ecs_running.assert_called_once()
+    manager.record_request_accepted.assert_called_once()
+    manager.ensure_ecs_running.assert_called_once_with(
+        request_id=manager.record_request_accepted.call_args.args[0]
+    )

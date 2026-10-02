@@ -50,6 +50,7 @@ class LambdaStack(Stack):
                 "ECS_CLUSTER_NAME": "PCManagementCluster",
                 "ECS_SERVICE_NAME": "PCManagementService",
                 "IDLE_TIMEOUT_SECONDS": "7200",
+                "START_LOCK_SECONDS": "180",
                 "RETRY_MAX_SECONDS": "180",
                 "INTERNAL_PROXY_SECRET_ARN": internal_proxy_secret.secret_arn,
                 "INTERNAL_PROXY_KEY_ID": "current",
@@ -168,10 +169,10 @@ class LambdaStack(Stack):
             )
         )
 
-        # 1時間ごとの EventBridge ルール
+        # 最大15分以内にアイドル条件を反映する EventBridge ルール
         rule = events.Rule(
             self, "EcsTimeoutCheckRule",
-            schedule=events.Schedule.rate(Duration.hours(1))
+            schedule=events.Schedule.rate(Duration.minutes(15))
         )
         rule.add_target(targets.LambdaFunction(timeout_check_lambda))
 

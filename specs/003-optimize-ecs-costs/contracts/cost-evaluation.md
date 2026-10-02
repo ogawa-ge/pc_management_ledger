@@ -4,6 +4,15 @@
 
 FR-002〜FR-005、FR-017、FR-019およびSC-001、SC-002、SC-008、SC-009を再現可能な記録として残すための必須フォーマットを定義する。単価は固定値としてこの契約に埋め込まず、評価実施日のAWS公式情報から取得する。
 
+### Requirement mapping
+
+| Contract section | Requirement / success criterion |
+|---|---|
+| 共通評価条件・候補比較・費用明細 | FR-005, SC-008 |
+| 通信検証記録 | FR-004, FR-017, SC-002 |
+| 導入後実績比較・必須結論 | FR-019, SC-009 |
+| NAT 0・初期稼働0の証跡参照 | FR-002, FR-003, SC-001 |
+
 ## 2. 共通評価条件
 
 各評価記録の先頭に次を必ず記載する。
@@ -96,6 +105,16 @@ APIキー、認証トークン、完全なPC実データは証跡へ含めない
 
 対象期間は導入後連続30日または最初の完全な請求期間とする。
 
+### Required input sources
+
+- AWS Cost Explorerまたは請求明細: 対象期間、リージョン、サービス、usage type、税区分を固定して取得する。
+- ECS service metrics / CloudWatch: Fargate実稼働時間と起動回数を見積条件へ正規化する。
+- CloudWatch Logs usage: 取り込み量と保存量を分離する。
+- DynamoDB、Lambda、API Gateway、ECR、public IPv4: 請求明細の主要費用項目を見積りと同じ名称・通貨・期間へ対応付ける。
+- 為替: 見積りと実績を円換算する場合は取得日、レート、情報源を記録する。
+
+取得値はAWSアカウントID、アクセスキー、Authorization、シークレット、実PCデータを除去した証跡参照として保存する。
+
 | Service/Item | Estimated JPY | Actual JPY | Difference JPY | Difference % | Cause hypothesis | Action |
 |---|---:|---:|---:|---:|---|---|
 |  |  |  | `actual-estimated` | 定義式 |  |  |
@@ -106,6 +125,16 @@ APIキー、認証トークン、完全なPC実データは証跡へ含めない
 differencePercent =
   estimated > 0 ? ((actual - estimated) / estimated) × 100
                 : (actual > 0 ? "NEW_COST" : 0)
+```
+
+合計差率も同じ式で、明細差率の単純平均ではなく合計額から計算する。
+
+```text
+totalDifferenceJpy = actualTotalJpy - estimatedTotalJpy
+totalDifferencePercent =
+  estimatedTotalJpy > 0
+    ? (totalDifferenceJpy / estimatedTotalJpy) × 100
+    : (actualTotalJpy > 0 ? "NEW_COST" : 0)
 ```
 
 ### Mandatory conclusion

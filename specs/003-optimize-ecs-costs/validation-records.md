@@ -57,6 +57,81 @@
 
 ## 5. 実施記録
 
+### `local-us3-concurrency-stop-race`: 起動集約・停止競合
+
+- **実施日時**: 2026-09-30
+- **環境**: local
+- **関連タスク**: T046〜T053
+- **事前条件**:
+  - ECS APIと`SystemActivity`はモックを使用
+  - 条件付き更新失敗をDynamoDBの`ConditionalCheckFailedException`として再現
+- **期待結果**: 同時10要求の起動更新が1回に集約され、期限切れロックを回収でき、旧所有者の状態確定を拒否する。停止所有権取得前の新規世代では停止せず、`desiredCount=0`後の新規世代では`desiredCount=1`を再適用する
+- **実結果**:
+  - 10スレッドの同時要求で起動所有権取得1件、非取得9件、`UpdateService(desiredCount=1)` 1回となった
+  - 起動ロック期限切れ回収、現所有者・現世代だけの`RUNNING`/`START_FAILED`確定、停止取消要求が取得済み所有権を使う再起動を確認した
+  - 停止ゲートの条件不成立では`UpdateService(0)`が0回、停止更新後に世代が変わったケースでは`UpdateService`が`0`, `1`の順で呼ばれた
+  - AWS検証用`scripts/validate-concurrent-start.ps1`を作成し、PowerShell構文解析に成功した
+- **所要秒数**: Lambda全テスト0.46秒
+- **結果**: PASS（AWS実環境でのT054は未実施）
+- **失敗理由**: N/A
+- **証跡参照**:
+  - `.venv\Scripts\python.exe -m pytest backend\lambda\tests -q` → 23 passed
+  - `backend/lambda/tests/test_ecs_manager.py`
+  - `backend/lambda/tests/test_ecs_stop_race.py`
+  - `scripts/validate-concurrent-start.ps1` → PowerShell parser PASS
+- **秘密情報確認**: 実キー、Authorization、署名、秘密値、AWSアカウントIDを含まない
+
+### `local-us4-activity-idle-gate`: 活動追跡・2時間停止ゲート・15分判定
+
+- **実施日時**: 2026-09-30
+- **環境**: local
+- **関連タスク**: T055〜T062
+- **事前条件**:
+  - プロキシ先HTTP、ECS API、DynamoDBをモック化
+  - 固定時計で2時間境界を再現
+- **期待結果**: 受付時刻、処理中件数、2xx成功時刻を更新し、全終了経路で処理中件数を減算する。2時間未満・処理中・異常記録では停止せず、境界以上かつ正常な世代だけ停止する。EventBridgeは15分間隔である
+- **実結果**:
+  - 2xx、409、転送例外のすべてで処理中件数の減算を確認し、2xxだけが成功活動として記録された
+  - 1時間59分59秒、2時間境界、処理中、時刻欠損・不正・未来、件数欠損・負数を固定時計で検証した
+  - 異常記録は`invalid_runtime_activity`を構造化ログへ出してfail-openとなり、停止APIを呼ばなかった
+  - CDK assertionで`rate(15 minutes)`と停止判定Lambdaのテーブル名・クラスター名・サービス名・7200秒設定を確認した
+  - AWS検証用`scripts/validate-idle-sleep.ps1`を作成し、既存`global`項目のバックアップ・`finally`復元とPowerShell構文解析を確認した
+- **所要秒数**: infrastructure全テスト107.01秒、Lambda全テスト0.46秒
+- **結果**: PASS（AWS実環境でのT063は未実施）
+- **失敗理由**: N/A
+- **証跡参照**:
+  - `.venv\Scripts\python.exe -m pytest backend\lambda\tests -q` → 23 passed
+  - `.venv\Scripts\python.exe -m pytest infrastructure\tests -q` → 7 passed
+  - `infrastructure/tests/unit/test_ecs_idle_schedule.py`
+  - `scripts/validate-idle-sleep.ps1` → PowerShell parser PASS
+- **秘密情報確認**: 実キー、Authorization、署名、秘密値、AWSアカウントIDを含まない
+
+### `local-cross-cutting-20260930`: ローカル総合ゲート
+
+- **実施日時**: 2026-09-30
+- **環境**: local
+- **関連タスク**: T064, T069
+- **事前条件**:
+  - 外部Gemini実通信を必要とする2テストを通常ゲートから除外
+  - Lambda/ECSは同名`src`パッケージのため別プロセスで実行
+- **期待結果**: Lambda、ECS、Infrastructure、Frontend型検査・build、CDK synthが成功し、費用実績契約に入力元と差率式が定義される
+- **実結果**:
+  - Lambda 23件、ECS 56件、Infrastructure 7件が成功した
+  - `npx tsc --noEmit`とNext.js production buildが成功した
+  - CDK synthが成功し、既存の`VpcProps#cidr`非推奨警告だけが残った
+  - 費用契約へFR-005・FR-019、SC-008・SC-009の対応、Cost Explorer等の入力元、明細・合計差率式を追加した
+- **所要秒数**: Lambda 0.46秒、ECS 3.00秒、Infrastructure 107.01秒、その他N/A
+- **結果**: PASS
+- **失敗理由**: N/A
+- **証跡参照**:
+  - `.venv\Scripts\python.exe -m pytest backend\lambda\tests -q` → 23 passed
+  - `.venv\Scripts\python.exe -m pytest backend\ecs\tests -q --ignore=backend\ecs\tests\test_gemini_direct.py --ignore=backend\ecs\tests\test-gemini-accuracy.py` → 56 passed
+  - `.venv\Scripts\python.exe -m pytest infrastructure\tests -q` → 7 passed
+  - `frontend: npx tsc --noEmit; npm run build` → exit code 0
+  - `infrastructure: ..\.venv\Scripts\python.exe app.py` → synth completed
+  - `specs/003-optimize-ecs-costs/contracts/cost-evaluation.md`
+- **秘密情報確認**: 実キー、Authorization、署名、秘密値、AWSアカウントIDを含まない
+
 ### `local-phase1-route-inventory`: 状態変更ルート棚卸し
 
 - **実施日時**: 2026-09-25

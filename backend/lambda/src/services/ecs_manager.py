@@ -1,487 +1,519 @@
-"""
-ECS 自動スリープおよび起動ロジック
+"""ECS の起動集約、活動追跡、安全な自動停止を管理する。"""
 
-このモジュールは、AWS ECS タスクの自動スリープ/起動を管理します。
-- ユーザーが資産管理機能にアクセスする際に ECS を起動
-- 2 時間のアイドル時間後に自動的にスリープ状態に遷移
-"""
+import json
+import logging
+import os
+import uuid
+from datetime import datetime, timezone
+from decimal import Decimal
+from typing import Any, Dict, Optional
 
 import boto3
-import json
-import time
-import logging
-from typing import Dict, Any, Optional
-from datetime import datetime, timedelta
 from botocore.exceptions import ClientError
 
-# CloudWatch Logs へのロギング設定
+
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-
-# CloudWatch Logs クライアント
 logs_client = boto3.client("logs")
 
 
 class ECSManager:
-    """ECS タスクの起動・停止・スリープ管理を行うクラス"""
+    """既存 ECS Service と SystemActivity/global の状態を調停する。"""
 
-    def __init__(self, cluster_name: str = "PCManagementCluster"):
-        """
-        ECSManager を初期化します
-
-        Args:
-            cluster_name (str): ECS クラスター名
-        """
+    def __init__(self, cluster_name: Optional[str] = None, clock=None):
         self.ecs_client = boto3.client("ecs")
         self.dynamodb = boto3.resource("dynamodb")
-        self.cluster_name = cluster_name
-        self.task_definition = "PCManagementTaskDefinition"
-        # ECS のスリープを実現するため、タスク数を 0 に設定する状態を「スリープ」と定義
+        self.cluster_name = cluster_name or os.getenv("ECS_CLUSTER_NAME", "PCManagementCluster")
+        self.service_name = os.getenv("ECS_SERVICE_NAME", "PCManagementService")
+        self.system_activity_table_name = os.getenv(
+            "SYSTEM_ACTIVITY_TABLE_NAME", "SystemActivity"
+        )
+        self.system_activity_table = self.dynamodb.Table(self.system_activity_table_name)
         self.sleep_task_count = 0
         self.active_task_count = 1
-        self.idle_timeout_seconds = 2 * 60 * 60  # 2 hours
+        self.idle_timeout_seconds = int(os.getenv("IDLE_TIMEOUT_SECONDS", "7200"))
+        self.start_lock_seconds = int(os.getenv("START_LOCK_SECONDS", "180"))
         self.log_group_name = "/aws/lambda/pc-management-ecs"
-        
-        # ロググループの存在確認と作成
+        self.clock = clock or (lambda: datetime.now(timezone.utc))
         self._ensure_log_group()
 
-    def get_ecs_public_ip(self) -> Optional[str]:
-        """
-        実行中の ECS タスクのパブリック IP アドレスを取得します。
-        
-        Returns:
-            Optional[str]: タスクのパブリック IP アドレス、または None（起動中ではない、または IP 未割当の場合）
-        """
+    def _now(self) -> datetime:
+        now = self.clock()
+        if now.tzinfo is None:
+            return now.replace(tzinfo=timezone.utc)
+        return now.astimezone(timezone.utc)
+
+    def _now_iso(self) -> str:
+        return self._now().isoformat()
+
+    @staticmethod
+    def _is_conditional_failure(error: ClientError) -> bool:
+        return error.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException"
+
+    def _ensure_log_group(self) -> None:
         try:
-            # 1. サービスに属するタスクの一覧を取得
+            logs_client.describe_log_groups(logGroupNamePrefix=self.log_group_name)
+        except Exception:
+            logger.debug("log group preflight skipped", exc_info=True)
+
+    def _log_audit(
+        self, action: str, status: str, details: Optional[Dict[str, Any]] = None
+    ) -> None:
+        entry = {
+            "timestamp": self._now_iso(),
+            "action": action,
+            "status": status,
+            "cluster": self.cluster_name,
+            **(details or {}),
+        }
+        logger.info(json.dumps(entry, ensure_ascii=False, default=str))
+
+    def _runtime_item(self) -> Dict[str, Any]:
+        return self.system_activity_table.get_item(
+            Key={"entityId": "global"}, ConsistentRead=True
+        ).get("Item", {})
+
+    def _service(self) -> Dict[str, Any]:
+        response = self.ecs_client.describe_services(
+            cluster=self.cluster_name, services=[self.service_name]
+        )
+        services = response.get("services", [])
+        if not services:
+            raise RuntimeError("ECS service was not found")
+        return services[0]
+
+    def get_ecs_public_ip(self) -> Optional[str]:
+        try:
             tasks_response = self.ecs_client.list_tasks(
                 cluster=self.cluster_name,
-                serviceName="PCManagementService",
-                desiredStatus="RUNNING"
+                serviceName=self.service_name,
+                desiredStatus="RUNNING",
             )
-            
             task_arns = tasks_response.get("taskArns", [])
             if not task_arns:
                 return None
-            
-            # 2. タスクの詳細を取得して ENI のアタッチメントを特定
-            tasks_detail = self.ecs_client.describe_tasks(
-                cluster=self.cluster_name,
-                tasks=[task_arns[0]]
-            )
-            
-            tasks = tasks_detail.get("tasks", [])
-            if not tasks:
+            tasks = self.ecs_client.describe_tasks(
+                cluster=self.cluster_name, tasks=[task_arns[0]]
+            ).get("tasks", [])
+            if not tasks or tasks[0].get("lastStatus") != "RUNNING":
                 return None
-                
-            task = tasks[0]
-            # タスクが完全に RUNNING でない場合は IP の取得を待つ必要がある
-            if task.get("lastStatus") != "RUNNING":
-                return None
-                
-            attachments = task.get("attachments", [])
             eni_id = None
-            for attachment in attachments:
-                if attachment.get("type") == "ElasticNetworkInterface":
-                    details = attachment.get("details", [])
-                    for detail in details:
-                        if detail.get("name") == "networkInterfaceId":
-                            eni_id = detail.get("value")
-                            break
-            
+            for attachment in tasks[0].get("attachments", []):
+                if attachment.get("type") != "ElasticNetworkInterface":
+                    continue
+                for detail in attachment.get("details", []):
+                    if detail.get("name") == "networkInterfaceId":
+                        eni_id = detail.get("value")
+                        break
             if not eni_id:
                 return None
-                
-            # 3. EC2 クライアントで ENI の情報を取得してパブリック IP を抽出
             ec2_client = boto3.client("ec2")
-            eni_response = ec2_client.describe_network_interfaces(
+            interfaces = ec2_client.describe_network_interfaces(
                 NetworkInterfaceIds=[eni_id]
-            )
-            
-            interfaces = eni_response.get("NetworkInterfaces", [])
+            ).get("NetworkInterfaces", [])
             if not interfaces:
                 return None
-                
-            association = interfaces[0].get("Association", {})
-            public_ip = association.get("PublicIp")
+            public_ip = interfaces[0].get("Association", {}).get("PublicIp")
+            if public_ip:
+                self._mark_runtime_running()
             return public_ip
-            
-        except Exception as e:
-            logger.error(f"Failed to get ECS public IP: {str(e)}")
+        except Exception as error:
+            logger.error("Failed to get ECS public IP: %s", error)
             return None
 
-    def _ensure_log_group(self) -> None:
-        """CloudWatch Logs のロググループを確認し、なければ作成します"""
+    def record_request_accepted(self, request_id: Optional[str] = None) -> Dict[str, Any]:
+        """受付時刻を更新し、停止中なら新しい起動世代へ進める。"""
+        now_value = self._now()
+        now = now_value.isoformat()
+        owner = request_id or str(uuid.uuid4())
+        self.system_activity_table.update_item(
+            Key={"entityId": "global"},
+            UpdateExpression=(
+                "SET lastAcceptedAt=:now, "
+                "runtimeState=if_not_exists(runtimeState,:stopped), "
+                "generation=if_not_exists(generation,:zero), "
+                "inFlightCount=if_not_exists(inFlightCount,:zero), "
+                "lastStateChangedAt=if_not_exists(lastStateChangedAt,:now)"
+            ),
+            ExpressionAttributeValues={
+                ":now": now,
+                ":stopped": "STOPPED",
+                ":zero": Decimal(0),
+            },
+        )
         try:
-            try:
-                logs_client.describe_log_groups(logGroupNamePrefix=self.log_group_name)
-            except logs_client.exceptions.ResourceNotFoundException:
-                try:
-                    logs_client.create_log_group(logGroupName=self.log_group_name)
-                    logger.info(f"Created log group: {self.log_group_name}")
-                except Exception as e:
-                    logger.warning(f"Failed to create log group: {str(e)}")
-        except Exception as e:
-            logger.warning(f"Failed to ensure log group exists: {str(e)}")
+            response = self.system_activity_table.update_item(
+                Key={"entityId": "global"},
+                UpdateExpression=(
+                    "SET runtimeState=:starting, generation=generation+:one, "
+                    "startRequestedAt=:now, lastStateChangedAt=:now, "
+                    "startOwnerRequestId=:owner, startLockExpiresAt=:expiry"
+                ),
+                ConditionExpression="runtimeState=:stopping",
+                ExpressionAttributeValues={
+                    ":starting": "STARTING",
+                    ":stopping": "STOPPING",
+                    ":one": Decimal(1),
+                    ":now": now,
+                    ":owner": owner,
+                    ":expiry": Decimal(int(now_value.timestamp()) + self.start_lock_seconds),
+                },
+                ReturnValues="ALL_NEW",
+            )
+            return {"stop_cancelled": True, **response.get("Attributes", {})}
+        except ClientError as error:
+            if not self._is_conditional_failure(error):
+                raise
+        return {"stop_cancelled": False}
 
-    def _log_audit(self, action: str, status: str, details: Dict[str, Any] = None) -> None:
-        """
-        監査ログを CloudWatch Logs に出力します
+    def begin_in_flight(self) -> None:
+        self.system_activity_table.update_item(
+            Key={"entityId": "global"},
+            UpdateExpression=(
+                "SET inFlightCount=if_not_exists(inFlightCount,:zero)+:one, "
+                "lastStateChangedAt=if_not_exists(lastStateChangedAt,:now)"
+            ),
+            ExpressionAttributeValues={
+                ":zero": Decimal(0),
+                ":one": Decimal(1),
+                ":now": self._now_iso(),
+            },
+        )
 
-        Args:
-            action (str): 実行したアクション（start, stop, sleep, check など）
-            status (str): ステータス（success, failure など）
-            details (Dict[str, Any]): その他の詳細情報
-        """
+    def finish_in_flight(self, succeeded: bool) -> None:
+        values = {":zero": Decimal(0), ":one": Decimal(1)}
+        expression = "SET inFlightCount=inFlightCount-:one"
+        if succeeded:
+            expression += ", lastActivityAt=:now"
+            values[":now"] = self._now_iso()
         try:
-            log_entry = {
-                "timestamp": datetime.utcnow().isoformat(),
-                "action": action,
-                "status": status,
-                "cluster": self.cluster_name,
-                **(details or {}),
-            }
-            
-            # CloudWatch Logs に出力
-            logger.info(json.dumps(log_entry))
-            
-        except Exception as e:
-            logger.error(f"Failed to log audit: {str(e)}")
-
-    def _update_last_activity(self, entity_id: Optional[str] = None, entity_type: str = "system") -> None:
-        """
-        DynamoDB の lastActivityAt フィールドを更新します
-
-        Args:
-            entity_id (Optional[str]): ユーザー ID または PC ID
-            entity_type (str): エンティティの種類（system, user, pc）
-        """
-        try:
-            if entity_type == "system":
-                # システム全体のアクティビティ更新
-                table = self.dynamodb.Table("SystemActivity")
-                table.update_item(
-                    Key={"entityId": "global"},
-                    UpdateExpression="SET lastActivityAt = :timestamp",
-                    ExpressionAttributeValues={":timestamp": datetime.utcnow().isoformat()},
-                )
-            elif entity_type == "user" and entity_id:
-                # ユーザーのアクティビティ更新
-                table = self.dynamodb.Table("Users")
-                table.update_item(
-                    Key={"userId": entity_id},
-                    UpdateExpression="SET lastActivityAt = :timestamp",
-                    ExpressionAttributeValues={":timestamp": datetime.utcnow().isoformat()},
-                )
-            elif entity_type == "pc" and entity_id:
-                # PC のアクティビティ更新
-                table = self.dynamodb.Table("PCs")
-                table.update_item(
-                    Key={"pcId": entity_id},
-                    UpdateExpression="SET lastActivityAt = :timestamp",
-                    ExpressionAttributeValues={":timestamp": datetime.utcnow().isoformat()},
-                )
-        except Exception as e:
-            logger.warning(f"Failed to update last activity: {str(e)}")
-
-    def start_ecs(self, user_id: Optional[str] = None) -> Dict[str, Any]:
-        """
-        ECS タスクを起動します（スリープ状態から復帰）
-
-        Args:
-            user_id (Optional[str]): リクエストを送信したユーザーID
-
-        Returns:
-            Dict[str, Any]: 起動結果とタスク情報
-        """
-        try:
-            # 現在の ECS サービスの状態を確認
-            service_response = self.ecs_client.describe_services(
-                cluster=self.cluster_name, services=["PCManagementService"]
+            self.system_activity_table.update_item(
+                Key={"entityId": "global"},
+                UpdateExpression=expression,
+                ConditionExpression="inFlightCount > :zero",
+                ExpressionAttributeValues=values,
+            )
+        except ClientError as error:
+            if not self._is_conditional_failure(error):
+                raise
+            self._log_audit(
+                "finish_in_flight", "invalid_runtime_activity", {"reason": "non_positive_in_flight"}
             )
 
-            current_count = service_response["services"][0].get("desiredCount", 0)
+    def _claim_start(self, owner: str) -> Optional[int]:
+        runtime = self._runtime_item()
+        if (
+            runtime.get("runtimeState") == "STARTING"
+            and runtime.get("startOwnerRequestId") == owner
+            and isinstance(runtime.get("generation"), (int, Decimal))
+        ):
+            return int(runtime["generation"])
+        now = self._now()
+        now_iso = now.isoformat()
+        now_epoch = Decimal(int(now.timestamp()))
+        lock_expiry = Decimal(int(now.timestamp()) + self.start_lock_seconds)
+        try:
+            response = self.system_activity_table.update_item(
+                Key={"entityId": "global"},
+                UpdateExpression=(
+                    "SET runtimeState=:starting, "
+                    "generation=if_not_exists(generation,:zero)+:one, "
+                    "inFlightCount=if_not_exists(inFlightCount,:zero), "
+                    "startOwnerRequestId=:owner, startRequestedAt=:now, "
+                    "startLockExpiresAt=:expiry, lastStateChangedAt=:now"
+                ),
+                ConditionExpression=(
+                    "attribute_not_exists(runtimeState) OR "
+                    "runtimeState IN (:stopped,:failed,:running) OR "
+                    "(runtimeState=:starting AND startLockExpiresAt <= :nowEpoch)"
+                ),
+                ExpressionAttributeValues={
+                    ":starting": "STARTING",
+                    ":stopped": "STOPPED",
+                    ":failed": "START_FAILED",
+                    ":running": "RUNNING",
+                    ":zero": Decimal(0),
+                    ":one": Decimal(1),
+                    ":owner": owner,
+                    ":now": now_iso,
+                    ":expiry": lock_expiry,
+                    ":nowEpoch": now_epoch,
+                },
+                ReturnValues="ALL_NEW",
+            )
+            return int(response.get("Attributes", {}).get("generation", 1))
+        except ClientError as error:
+            if self._is_conditional_failure(error):
+                return None
+            raise
 
-            # 既に起動している場合はスキップ
-            if current_count > 0:
-                self._log_audit(
-                    action="start_ecs",
-                    status="already_running",
-                    details={"current_task_count": current_count, "user_id": user_id},
-                )
-                return {
-                    "status": "already_running",
-                    "message": "ECS service is already running",
-                    "current_task_count": current_count,
-                }
+    def _mark_start_outcome(
+        self, owner: str, generation: int, state: str, error_code: Optional[str] = None
+    ) -> bool:
+        expression = "SET runtimeState=:state, lastStateChangedAt=:now"
+        values: Dict[str, Any] = {
+            ":state": state,
+            ":now": self._now_iso(),
+            ":owner": owner,
+            ":generation": Decimal(generation),
+            ":starting": "STARTING",
+        }
+        if error_code:
+            expression += ", lastErrorCode=:error, lastErrorAt=:now"
+            values[":error"] = error_code
+        try:
+            self.system_activity_table.update_item(
+                Key={"entityId": "global"},
+                UpdateExpression=expression,
+                ConditionExpression=(
+                    "startOwnerRequestId=:owner AND generation=:generation "
+                    "AND runtimeState=:starting"
+                ),
+                ExpressionAttributeValues=values,
+            )
+            return True
+        except ClientError as error:
+            if self._is_conditional_failure(error):
+                return False
+            raise
 
-            # サービスの desired count を 1 に更新（起動）
+    def _mark_runtime_running(self) -> None:
+        runtime = self._runtime_item()
+        if runtime.get("runtimeState") == "RUNNING":
+            return
+        owner = runtime.get("startOwnerRequestId")
+        generation = runtime.get("generation")
+        if not owner or not isinstance(generation, (int, Decimal)):
+            self._log_audit(
+                "mark_runtime_running",
+                "invalid_runtime_activity",
+                {"reason": "start owner or generation is missing"},
+            )
+            return
+        self._mark_start_outcome(owner, int(generation), "RUNNING")
+
+    def start_ecs(
+        self, user_id: Optional[str] = None, request_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        owner = request_id or str(uuid.uuid4())
+        status = self.get_ecs_status()
+        if status.get("status") == "error":
+            return status
+        if status.get("running_count", 0) > 0 and status.get("desired_count", 0) > 0:
+            self._mark_runtime_running()
+            return {
+                "status": "already_running",
+                "message": "ECS is already running",
+                "running_count": status.get("running_count", 0),
+            }
+
+        generation = self._claim_start(owner)
+        if generation is None:
+            shared = self.get_ecs_status()
+            return {
+                "status": "already_running"
+                if shared.get("running_count", 0) > 0
+                else "starting",
+                "message": "ECS start is already in progress",
+                "desired_count": shared.get("desired_count", 0),
+                "running_count": shared.get("running_count", 0),
+            }
+
+        try:
             update_response = self.ecs_client.update_service(
                 cluster=self.cluster_name,
-                service="PCManagementService",
+                service=self.service_name,
                 desiredCount=self.active_task_count,
             )
-
-            # アクティビティを更新
-            self._update_last_activity(entity_id=user_id, entity_type="user")
-            self._update_last_activity(entity_type="system")
-
-            result = {
+            service = update_response.get("service", {})
+            self._log_audit(
+                "start_ecs",
+                "success",
+                {"generation": generation, "user_id": user_id, "owner_request_id": owner},
+            )
+            return {
                 "status": "started",
                 "message": "ECS service started",
-                "service_arn": update_response["service"]["serviceArn"],
+                "service_arn": service.get("serviceArn"),
                 "desired_count": self.active_task_count,
-                "timestamp": datetime.utcnow().isoformat(),
+                "generation": generation,
+                "timestamp": self._now_iso(),
             }
+        except ClientError as error:
+            code = error.response.get("Error", {}).get("Code", "ECS_START_FAILED")
+            self._mark_start_outcome(owner, generation, "START_FAILED", code)
+            self._log_audit("start_ecs", "failure", {"error_code": code})
+            return {"status": "error", "message": "Failed to start ECS", "error_code": code}
 
-            self._log_audit(
-                action="start_ecs",
-                status="success",
-                details={"user_id": user_id, "service_arn": update_response["service"]["serviceArn"]},
-            )
-
-            return result
-
-        except ClientError as e:
-            self._log_audit(
-                action="start_ecs",
-                status="failure",
-                details={"user_id": user_id, "error_code": e.response["Error"]["Code"], "error_message": str(e)},
-            )
-            return {
-                "status": "error",
-                "message": f"Failed to start ECS: {str(e)}",
-                "error_code": e.response["Error"]["Code"],
-            }
-
-    def stop_ecs(self, reason: str = "idle_timeout") -> Dict[str, Any]:
-        """
-        ECS タスクをスリープ状態にします（スケールダウン）
-
-        Args:
-            reason (str): 停止理由（idle_timeout, manual_stop など）
-
-        Returns:
-            Dict[str, Any]: スリープ状態への遷移結果
-        """
+    def stop_ecs(
+        self, reason: str = "idle_timeout", expected_generation: Optional[int] = None
+    ) -> Dict[str, Any]:
         try:
-            # サービスの desired count を 0 に更新（スリープ）
             update_response = self.ecs_client.update_service(
                 cluster=self.cluster_name,
-                service="PCManagementService",
+                service=self.service_name,
                 desiredCount=self.sleep_task_count,
             )
-
-            result = {
+            runtime = self._runtime_item()
+            generation_changed = (
+                expected_generation is not None
+                and int(runtime.get("generation", -1)) != expected_generation
+            )
+            restart_required = generation_changed or runtime.get("runtimeState") == "STARTING"
+            if restart_required:
+                self.ecs_client.update_service(
+                    cluster=self.cluster_name,
+                    service=self.service_name,
+                    desiredCount=self.active_task_count,
+                )
+                return {
+                    "status": "restart_requested",
+                    "message": "A newer operation requested ECS restart",
+                    "desired_count": self.active_task_count,
+                }
+            if expected_generation is not None:
+                try:
+                    self.system_activity_table.update_item(
+                        Key={"entityId": "global"},
+                        UpdateExpression="SET runtimeState=:stopped, lastStateChangedAt=:now",
+                        ConditionExpression="runtimeState=:stopping AND generation=:generation",
+                        ExpressionAttributeValues={
+                            ":stopped": "STOPPED",
+                            ":stopping": "STOPPING",
+                            ":generation": Decimal(expected_generation),
+                            ":now": self._now_iso(),
+                        },
+                    )
+                except ClientError as error:
+                    if not self._is_conditional_failure(error):
+                        raise
+                    self.ecs_client.update_service(
+                        cluster=self.cluster_name,
+                        service=self.service_name,
+                        desiredCount=self.active_task_count,
+                    )
+                    return {"status": "restart_requested", "desired_count": 1}
+            service = update_response.get("service", {})
+            self._log_audit("stop_ecs", "success", {"reason": reason})
+            return {
                 "status": "stopped",
                 "message": "ECS service stopped (sleeping)",
-                "service_arn": update_response["service"]["serviceArn"],
+                "service_arn": service.get("serviceArn"),
                 "desired_count": self.sleep_task_count,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": self._now_iso(),
             }
-
-            self._log_audit(
-                action="stop_ecs",
-                status="success",
-                details={"reason": reason, "service_arn": update_response["service"]["serviceArn"]},
-            )
-
-            return result
-
-        except ClientError as e:
-            self._log_audit(
-                action="stop_ecs",
-                status="failure",
-                details={"reason": reason, "error_code": e.response["Error"]["Code"], "error_message": str(e)},
-            )
-            return {
-                "status": "error",
-                "message": f"Failed to stop ECS: {str(e)}",
-                "error_code": e.response["Error"]["Code"],
-            }
+        except ClientError as error:
+            code = error.response.get("Error", {}).get("Code", "ECS_STOP_FAILED")
+            return {"status": "error", "message": "Failed to stop ECS", "error_code": code}
 
     def get_ecs_status(self) -> Dict[str, Any]:
-        """
-        ECS サービスの現在の状態を取得します
-
-        Returns:
-            Dict[str, Any]: ECS サービスの状態情報
-        """
         try:
-            service_response = self.ecs_client.describe_services(
-                cluster=self.cluster_name, services=["PCManagementService"]
-            )
-
-            service = service_response["services"][0]
+            service = self._service()
             desired_count = service.get("desiredCount", 0)
             running_count = service.get("runningCount", 0)
-
             return {
                 "status": "active" if running_count > 0 else "sleeping",
                 "desired_count": desired_count,
                 "running_count": running_count,
                 "deployment_status": service.get("status", "UNKNOWN"),
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": self._now_iso(),
             }
+        except (ClientError, RuntimeError) as error:
+            code = getattr(error, "response", {}).get("Error", {}).get("Code", "ECS_STATUS_FAILED")
+            return {"status": "error", "message": "Failed to get ECS status", "error_code": code}
 
-        except ClientError as e:
-            return {
-                "status": "error",
-                "message": f"Failed to get ECS status: {str(e)}",
-                "error_code": e.response["Error"]["Code"],
-            }
+    @staticmethod
+    def _parse_activity_timestamp(value: Any) -> datetime:
+        if not isinstance(value, str) or not value:
+            raise ValueError("lastActivityAt is missing")
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+
+    def _invalid_activity(self, check_id: str, reason: str) -> Dict[str, Any]:
+        self._log_audit(
+            "check_idle_timeout",
+            "invalid_runtime_activity",
+            {"check_id": check_id, "reason": reason},
+        )
+        return {"status": "skip", "reason": "invalid_runtime_activity", "message": reason}
 
     def check_and_auto_sleep(
         self, last_activity_timestamp: Optional[str] = None, check_id: str = "system"
     ) -> Dict[str, Any]:
-        """
-        アイドル時間をチェックし、必要に応じて自動スリープを実行します
-
-        Args:
-            last_activity_timestamp (Optional[str]): 最後のアクティビティのタイムスタンプ（ISO8601形式）
-            check_id (str): チェック ID（トレーサビリティ用）
-
-        Returns:
-            Dict[str, Any]: チェック結果とアクションの結果
-        """
-        try:
-            current_status = self.get_ecs_status()
-
-            if current_status.get("status") == "error":
-                self._log_audit(
-                    action="check_idle_timeout",
-                    status="failure",
-                    details={"check_id": check_id, "error": current_status.get("message")},
-                )
-                return current_status
-
-            # ECS が既にスリープしている場合はスキップ
-            if current_status.get("running_count", 0) == 0:
-                self._log_audit(
-                    action="check_idle_timeout",
-                    status="already_sleeping",
-                    details={"check_id": check_id},
-                )
-                return {
-                    "status": "already_sleeping",
-                    "message": "ECS is already in sleep state",
-                }
-
-            if not last_activity_timestamp:
-                self._log_audit(
-                    action="check_idle_timeout",
-                    status="skip",
-                    details={"check_id": check_id, "reason": "no_activity_timestamp"},
-                )
-                return {
-                    "status": "skip",
-                    "message": "No activity timestamp provided",
-                }
-
-            # 最後のアクティビティからの経過時間を計算
-            last_activity = datetime.fromisoformat(last_activity_timestamp)
-            current_time = datetime.utcnow()
-            idle_time = (current_time - last_activity).total_seconds()
-
-            if idle_time > self.idle_timeout_seconds:
-                # アイドル時間が 2 時間を超えた場合、自動スリープ
-                sleep_result = self.stop_ecs(reason="idle_timeout")
-                self._log_audit(
-                    action="check_idle_timeout",
-                    status="auto_slept",
-                    details={
-                        "check_id": check_id,
-                        "idle_time_seconds": int(idle_time),
-                        "timeout_seconds": self.idle_timeout_seconds,
-                    },
-                )
-                return {
-                    "status": "auto_slept",
-                    "message": f"ECS auto-slept after {int(idle_time)} seconds of inactivity",
-                    "idle_time_seconds": idle_time,
-                    "action_result": sleep_result,
-                }
-            else:
-                remaining_time = self.idle_timeout_seconds - idle_time
-                self._log_audit(
-                    action="check_idle_timeout",
-                    status="active",
-                    details={
-                        "check_id": check_id,
-                        "idle_time_seconds": int(idle_time),
-                        "remaining_seconds": int(remaining_time),
-                    },
-                )
-                return {
-                    "status": "active",
-                    "message": "ECS is still active",
-                    "idle_time_seconds": idle_time,
-                    "remaining_until_auto_sleep": remaining_time,
-                }
-
-        except ValueError as e:
-            self._log_audit(
-                action="check_idle_timeout",
-                status="failure",
-                details={"check_id": check_id, "error": f"Invalid timestamp format: {str(e)}"},
-            )
-            return {
-                "status": "error",
-                "message": f"Invalid timestamp format: {str(e)}",
-            }
-        except Exception as e:
-            return {
-                "status": "error",
-                "message": f"Error checking auto-sleep: {str(e)}",
-            }
-
-    def ensure_ecs_running(self, user_id: Optional[str] = None) -> Dict[str, Any]:
-        """
-        ECS が実行中であることを確認し、必要に応じて起動します
-
-        Args:
-            user_id (Optional[str]): リクエストを送信したユーザーID
-
-        Returns:
-            Dict[str, Any]: 実行結果
-        """
         current_status = self.get_ecs_status()
-
         if current_status.get("status") == "error":
-            self._log_audit(
-                action="ensure_ecs_running",
-                status="failure",
-                details={"user_id": user_id, "error": current_status.get("message")},
-            )
             return current_status
+        if current_status.get("running_count", 0) == 0:
+            return {"status": "already_sleeping", "message": "ECS is already in sleep state"}
 
-        if current_status.get("running_count", 0) > 0:
-            self._log_audit(
-                action="ensure_ecs_running",
-                status="already_running",
-                details={"user_id": user_id, "running_count": current_status.get("running_count", 0)},
-            )
+        runtime = self._runtime_item()
+        activity_value = last_activity_timestamp or runtime.get("lastActivityAt")
+        in_flight = runtime.get("inFlightCount")
+        generation = runtime.get("generation")
+        if not isinstance(in_flight, (int, Decimal)) or in_flight < 0:
+            return self._invalid_activity(check_id, "inFlightCount is missing or invalid")
+        if int(in_flight) > 0:
+            return {"status": "active", "reason": "in_flight", "in_flight_count": int(in_flight)}
+        if not isinstance(generation, (int, Decimal)) or generation < 0:
+            return self._invalid_activity(check_id, "generation is missing or invalid")
+        try:
+            last_activity = self._parse_activity_timestamp(activity_value)
+        except (TypeError, ValueError) as error:
+            return self._invalid_activity(check_id, str(error))
+        now = self._now()
+        if last_activity > now:
+            return self._invalid_activity(check_id, "lastActivityAt is in the future")
+        idle_time = (now - last_activity).total_seconds()
+        if idle_time < self.idle_timeout_seconds:
             return {
-                "status": "already_running",
-                "message": "ECS is already running",
-                "running_count": current_status.get("running_count", 0),
+                "status": "active",
+                "idle_time_seconds": idle_time,
+                "remaining_until_auto_sleep": self.idle_timeout_seconds - idle_time,
             }
 
-        # ECS が起動していない場合、起動処理を実行
-        return self.start_ecs(user_id=user_id)
+        generation_int = int(generation)
+        try:
+            self.system_activity_table.update_item(
+                Key={"entityId": "global"},
+                UpdateExpression="SET runtimeState=:stopping, stopRequestedAt=:now, lastStateChangedAt=:now",
+                ConditionExpression=(
+                    "runtimeState=:running AND generation=:generation AND "
+                    "inFlightCount=:zero AND lastActivityAt <= :boundary"
+                ),
+                ExpressionAttributeValues={
+                    ":stopping": "STOPPING",
+                    ":running": "RUNNING",
+                    ":generation": Decimal(generation_int),
+                    ":zero": Decimal(0),
+                    ":boundary": datetime.fromtimestamp(
+                        now.timestamp() - self.idle_timeout_seconds, timezone.utc
+                    ).isoformat(),
+                    ":now": now.isoformat(),
+                },
+            )
+        except ClientError as error:
+            if self._is_conditional_failure(error):
+                return {"status": "active", "reason": "stop_gate_changed"}
+            raise
+        result = self.stop_ecs(reason="idle_timeout", expected_generation=generation_int)
+        return {
+            "status": "auto_slept" if result.get("status") == "stopped" else result.get("status"),
+            "idle_time_seconds": idle_time,
+            "action_result": result,
+        }
+
+    def ensure_ecs_running(
+        self, user_id: Optional[str] = None, request_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        return self.start_ecs(user_id=user_id, request_id=request_id)
 
 
-# グローバルインスタンス
 _ecs_manager: Optional[ECSManager] = None
 
 
 def get_ecs_manager() -> ECSManager:
-    """
-    ECSManager のシングルトンインスタンスを取得します
-
-    Returns:
-        ECSManager: ECSManager インスタンス
-    """
     global _ecs_manager
     if _ecs_manager is None:
         _ecs_manager = ECSManager()
@@ -489,25 +521,8 @@ def get_ecs_manager() -> ECSManager:
 
 
 def lambda_handler_ecs_start(event, context):
-    """
-    Lambda 関数: ECS を起動するハンドラー
-
-    Args:
-        event: Lambda イベント（user_id を含む可能性あり）
-        context: Lambda コンテキスト
-
-    Returns:
-        dict: API レスポンス
-    """
-    manager = get_ecs_manager()
-    
-    # イベントからユーザー ID を抽出
-    user_id = None
-    if isinstance(event, dict):
-        user_id = event.get("user_id") or event.get("userId")
-    
-    result = manager.start_ecs(user_id=user_id)
-
+    user_id = event.get("user_id") or event.get("userId") if isinstance(event, dict) else None
+    result = get_ecs_manager().start_ecs(user_id=user_id)
     return {
         "statusCode": 200 if result.get("status") != "error" else 500,
         "body": json.dumps(result),
@@ -516,25 +531,8 @@ def lambda_handler_ecs_start(event, context):
 
 
 def lambda_handler_ecs_stop(event, context):
-    """
-    Lambda 関数: ECS をスリープ状態に移行するハンドラー
-
-    Args:
-        event: Lambda イベント（reason を含む可能性あり）
-        context: Lambda コンテキスト
-
-    Returns:
-        dict: API レスポンス
-    """
-    manager = get_ecs_manager()
-    
-    # イベントから理由を抽出
-    reason = "manual_stop"
-    if isinstance(event, dict):
-        reason = event.get("reason", reason)
-    
-    result = manager.stop_ecs(reason=reason)
-
+    reason = event.get("reason", "manual_stop") if isinstance(event, dict) else "manual_stop"
+    result = get_ecs_manager().stop_ecs(reason=reason)
     return {
         "statusCode": 200 if result.get("status") != "error" else 500,
         "body": json.dumps(result),
@@ -543,19 +541,7 @@ def lambda_handler_ecs_stop(event, context):
 
 
 def lambda_handler_ecs_status(event, context):
-    """
-    Lambda 関数: ECS ステータスを確認するハンドラー
-
-    Args:
-        event: Lambda イベント
-        context: Lambda コンテキスト
-
-    Returns:
-        dict: API レスポンス
-    """
-    manager = get_ecs_manager()
-    result = manager.get_ecs_status()
-
+    result = get_ecs_manager().get_ecs_status()
     return {
         "statusCode": 200 if result.get("status") != "error" else 500,
         "body": json.dumps(result),
@@ -564,67 +550,18 @@ def lambda_handler_ecs_status(event, context):
 
 
 def lambda_handler_cloudwatch_timeout_check(event, context):
-    """
-    Lambda 関数: CloudWatch Events によるアイドルタイムアウトチェック（1 時間ごと）
-
-    このハンドラーは CloudWatch Events の定期的なトリガーによって呼び出されます。
-    最後のアクティビティから 2 時間経過していないかを確認し、必要に応じて ECS を停止します。
-
-    Args:
-        event: CloudWatch Events からのイベント
-        context: Lambda コンテキスト
-
-    Returns:
-        dict: チェック結果
-    """
     manager = get_ecs_manager()
-    
     try:
-        # システム全体の最後のアクティビティを取得
-        dynamodb = boto3.resource("dynamodb")
-        table = dynamodb.Table("SystemActivity")
-        
-        response = table.get_item(Key={"entityId": "global"})
-        
-        if "Item" not in response:
-            # 初めてのチェックの場合、アクティビティを記録
-            table.put_item(
-                Item={
-                    "entityId": "global",
-                    "lastActivityAt": datetime.utcnow().isoformat(),
-                }
-            )
-            logger.info("SystemActivity initialized")
-            return {
-                "statusCode": 200,
-                "body": json.dumps({
-                    "status": "initialized",
-                    "message": "SystemActivity initialized on first check"
-                }),
-                "headers": {"Content-Type": "application/json"},
-            }
-        
-        last_activity = response["Item"].get("lastActivityAt")
-        check_id = context.request_id
-        
-        result = manager.check_and_auto_sleep(
-            last_activity_timestamp=last_activity,
-            check_id=check_id
-        )
-        
+        result = manager.check_and_auto_sleep(check_id=getattr(context, "request_id", "system"))
         return {
             "statusCode": 200,
             "body": json.dumps(result),
             "headers": {"Content-Type": "application/json"},
         }
-    
-    except Exception as e:
-        logger.error(f"Error in CloudWatch timeout check: {str(e)}")
+    except Exception as error:
+        logger.exception("Error in timeout check")
         return {
             "statusCode": 500,
-            "body": json.dumps({
-                "status": "error",
-                "message": f"Error checking timeout: {str(e)}"
-            }),
+            "body": json.dumps({"status": "error", "message": str(error)}),
             "headers": {"Content-Type": "application/json"},
         }
