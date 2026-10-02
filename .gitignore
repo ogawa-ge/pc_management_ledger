@@ -15,6 +15,8 @@ __pycache__/
 venv/
 *.egg-info/
 .pytest_cache
+venv/
+.venv/
 *.aws
 .next/
 out/
@@ -32,3 +34,6 @@ error_logs*.txt
 raw_events.json
 log_output.txt
 logs.json
+
+# Claude Code local-only settings (per-machine permission grants)
+.claude/settings.local.json

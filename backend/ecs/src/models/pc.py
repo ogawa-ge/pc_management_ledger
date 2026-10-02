@@ -9,21 +9,30 @@ class Pc(BaseApiModel):
     owner_id: str
     type: str
     status: str = "Unused"  # InUse, Unused, PendingDisposal, Disposed
+    pc_name: Optional[str] = None
     cpu: Optional[str] = None
     memory: Optional[str] = None
     storage: Optional[str] = None
     os: Optional[str] = None
     manufacturer: Optional[str] = None
-    model: str
+    model: Optional[str] = None
+    gpu: Optional[str] = None
     serial_number: Optional[str] = None
     created_at: str
     updated_at: str
 
 
 class PcCreateRequest(BaseApiModel):
-    owner_id: str
-    specs_text: Optional[str] = None
+    owner_id: Optional[str] = None
     pc_type: str = "N"
+    pc_name: Optional[str] = None
+    cpu: Optional[str] = None
+    memory: Optional[str] = None
+    storage: Optional[str] = None
+    os: Optional[str] = None
+    manufacturer: Optional[str] = None
+    model: Optional[str] = None
+    gpu: Optional[str] = None
 
 
 class PcParseRequest(BaseApiModel):

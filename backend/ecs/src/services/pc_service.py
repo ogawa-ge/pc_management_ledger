@@ -1,6 +1,5 @@
 from typing import Dict, Any, Optional
 from src.models.pc import Pc, PcRepository
-from src.services.gemini_service import parse_specs
 from src.models.return_record import ReturnRecord, ReturnRecordRepository
 from src.models.usage_history import UsageHistory, UsageHistoryRepository
 from datetime import datetime
@@ -37,39 +36,55 @@ def generate_pc_id(owner_id: str, pc_type: str) -> str:
     new_number = max_number + 1
     return f"{pc_type}-{new_number:03d}"
 
-def create_pc(owner_id: str = None, specs_text: str = None, pc_type: str = "N") -> Dict[str, Any]:
+def create_pc(
+    owner_id: str = None,
+    pc_type: str = "N",
+    pc_name: Optional[str] = None,
+    cpu: Optional[str] = None,
+    memory: Optional[str] = None,
+    storage: Optional[str] = None,
+    os: Optional[str] = None,
+    manufacturer: Optional[str] = None,
+    model: Optional[str] = None,
+    gpu: Optional[str] = None,
+) -> Dict[str, Any]:
     """
-    PCを新規作成
+    PCを新規作成する。
+
+    スペック項目（pc_name/cpu/memory/storage/os/manufacturer/model/gpu）は、
+    クライアント側で既に確定済み（Gemini抽出結果、または手動編集後の値）の
+    構造化フィールドとして受け取り、ここでは再度Gemini APIを呼び出さない。
+    （research.md Decision 4: 手動編集がサーバー側の再抽出で上書きされるのを防ぐため）
     """
-    if not owner_id:
+    # owner_idが指定されていない場合は、認証情報から取得するなどの処理が必要（仮実装）
+    # ここでは、owner_idが指定されていない場合はエラーとする
+    if owner_id is None:
         raise HTTPException(status_code=400, detail="owner_id is required")
 
-    # スペックを解析
-    parsed_specs = parse_specs(specs_text)
-    
     # PC IDを生成
     pc_id = generate_pc_id(owner_id, pc_type)
-    
+
     # PCオブジェクトを作成
     pc = Pc(
         pc_id=pc_id,
         owner_id=owner_id,
         type=pc_type,
-        cpu=parsed_specs.get("cpu"),
-        memory=parsed_specs.get("memory"),
-        storage=parsed_specs.get("storage"),
-        os=parsed_specs.get("os"),
-        manufacturer=parsed_specs.get("manufacturer"),
-        model=parsed_specs.get("model"),
-        serial_number=parsed_specs.get("serial_number"),
+        pc_name=pc_name,
+        cpu=cpu,
+        memory=memory,
+        storage=storage,
+        os=os,
+        manufacturer=manufacturer,
+        model=model,
+        gpu=gpu,
         created_at=datetime.now().isoformat(),
         updated_at=datetime.now().isoformat()
     )
-    
+
     # リポジトリを使用してPCを保存
     repository = PcRepository()
     created_pc = repository.create_pc(pc)
-    
+
     return created_pc.dict()
 
 async def process_pc_return(pc_id: str, user_id: str, return_reason: str, pc_status_at_return: str) -> Dict[str, Any]:

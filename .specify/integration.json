@@ -2,14 +2,14 @@
   "version": "0.16.3.dev0",
   "integration_state_schema": 1,
   "installed_integrations": [
-    "cline"
+    "claude"
   ],
   "integration_settings": {
-    "cline": {
+    "claude": {
       "script": "ps",
       "invoke_separator": "-"
     }
   },
-  "integration": "cline",
-  "default_integration": "cline"
+  "integration": "claude",
+  "default_integration": "claude"
 }
