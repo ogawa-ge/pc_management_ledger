@@ -72,7 +72,7 @@
 - [X] T024 [P] [US1] 現行「NAT 1・常時1」と採用「NAT 0・初期0/利用時1」とEndpoint却下案を同一の価格基準日、東京リージョン、730時間、通信量、為替条件で比較し採否を`specs/003-optimize-ecs-costs/cost-estimate.md`に記録する
 - [X] T025 [US1] `infrastructure/tests/unit/test_ecs_cost_optimization.py`、`infrastructure/tests/unit/test_internal_proxy_secret.py`、Lambda/ECS署名テスト、CDK synthを実行し、NAT 0、初期0、public IP、ALB 0、署名境界、秘密非露出を`specs/003-optimize-ecs-costs/validation-records.md`に記録する
 - [ ] T026 [US1] 検証環境で`scripts/validate-ecs-connectivity.ps1`を実行し、デプロイ直後desired/running 0と新規タスクからの4通信を`specs/003-optimize-ecs-costs/validation-records.md`に記録する
-- [ ] T027 [US1] 検証環境で`scripts/validate-internal-proxy-signature.ps1`をECSへ次期秘密追加、Lambdaを次期へ切替、ECSから旧秘密失効の順に実行し、各段階の正当転送100%成功、旧秘密失効後100%拒否、業務書込み0件を`specs/003-optimize-ecs-costs/validation-records.md`に記録する
+- [X] T027 [US1] 検証環境で`scripts/validate-internal-proxy-signature.ps1`をECSへ次期秘密追加、Lambdaを次期へ切替、ECSから旧秘密失効の順に実行し、各段階の正当転送100%成功、旧秘密失効後100%拒否、業務書込み0件を`specs/003-optimize-ecs-costs/validation-records.md`に記録する
 
 **Checkpoint**: US1単独で、未使用時固定費を除去した構成、必要通信、公開ECSへの多層防御、無停止秘密ローテーションを実証できる。
 
@@ -131,7 +131,7 @@
 - [X] T051 [US3] 新規操作受付時に世代を進め、停止所有権取得前なら停止中止、既存停止更新後なら既存`ensure_ecs_running()`で再起動する競合処理を`backend/lambda/src/services/ecs_manager.py`と`backend/lambda/src/main.py`へ統合する
 - [X] T052 [P] [US3] 停止状態へ10件を同時送信し、起動更新回数、各応答、最終desired/running数を確認する`scripts/validate-concurrent-start.ps1`を作成する
 - [X] T053 [US3] 起動・停止競合テストを実行し、同時10件と停止前後の競合結果を`specs/003-optimize-ecs-costs/validation-records.md`に記録する
-- [ ] T054 [US3] 検証環境で`scripts/validate-concurrent-start.ps1`と停止競合シナリオを実行し、起動更新1回、最終稼働数1、元操作一回成功を`specs/003-optimize-ecs-costs/validation-records.md`に記録する
+- [X] T054 [US3] 検証環境で`scripts/validate-concurrent-start.ps1`と停止競合シナリオを実行し、起動更新1回、最終稼働数1、元操作一回成功を`specs/003-optimize-ecs-costs/validation-records.md`に記録する
 
 **Checkpoint**: US3単独で、複数Lambda実行環境を想定した起動集約と停止競合からの要求回復を検証できる。
 
@@ -156,7 +156,7 @@
 - [X] T060 [US4] 既存`EcsTimeoutCheckRule`を1時間から15分へ変更し、既存停止判定Lambdaへテーブル名・アイドル秒数を渡す`infrastructure/stacks/lambda_stack.py`
 - [X] T061 [P] [US4] 2時間境界、処理中、異常記録、停止後desired/running 0を安全に再現する`scripts/validate-idle-sleep.ps1`を作成する
 - [X] T062 [US4] 活動追跡、停止判定、CDKスケジュールのテストを実行し、結果を`specs/003-optimize-ecs-costs/validation-records.md`に記録する
-- [ ] T063 [US4] 検証環境で`scripts/validate-idle-sleep.ps1`を実行し、処理中停止0件、異常時fail-open、アイドル成立後15分以内のdesired/running 0を`specs/003-optimize-ecs-costs/validation-records.md`に記録する
+- [X] T063 [US4] 検証環境で`scripts/validate-idle-sleep.ps1`を実行し、処理中停止0件、異常時fail-open、アイドル成立後15分以内のdesired/running 0を`specs/003-optimize-ecs-costs/validation-records.md`に記録する
 
 **Checkpoint**: US4単独で、001由来の2時間自動停止が処理中操作を壊さず待機費0へ戻ることを検証できる。
 

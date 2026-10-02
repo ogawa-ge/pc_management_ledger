@@ -141,7 +141,7 @@ async def proxy_to_ecs(path: str, request: Request):
             headers=headers,
             body=body if body else None,
             redirect=False,
-            timeout=10.0
+            timeout=urllib3.Timeout(connect=3.0, read=25.0)
         )
         
         # レスポンスヘッダーからプロキシに不適切なものを除外

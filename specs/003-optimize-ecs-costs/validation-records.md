@@ -219,3 +219,105 @@
   - `infrastructure: ..\.venv\Scripts\python.exe app.py` → synth completed
   - `frontend: npx tsc --noEmit; npm run build` → exit code 0
 - **秘密情報確認**: 実キー、Authorization、署名、秘密値、AWSアカウントIDを含まない
+
+### `aws-20261002-deploy-connectivity`: コスト最適化構成デプロイ・新規タスク通信
+
+- **実施日時**: 2026-10-02T08:21:21Z〜2026-10-02T08:34:00Z
+- **環境**: staging
+- **関連タスク**: T026（部分実施）
+- **事前条件**:
+  - `InternalProxySigningSecret`を秘密値非表示で作成
+  - ローカルのLambda 23件、ECS 56件、Infrastructure 10件、フロントエンド型検査・build、CDK synthが成功
+- **期待結果**: デプロイ直後`desired/running=0/0`で、利用時に新規タスクが起動し、ECR、CloudWatch Logs、DynamoDB、Gemini APIへ到達する
+- **実結果**:
+  - DatabaseStack、LambdaStack、EcsStackをデプロイし、NAT Gateway 0、ECS `0/0/0`、public IP有効、TTL `expiresAt`有効、15分ルール有効を確認した
+  - 既存Private Subnetの論理IDを保持する移行へ修正し、NAT Gateway、NAT用EIP、NAT向けDefaultRouteだけを削除した
+  - 停止中の一覧要求は`503 starting`を2回返した後、37.7秒で200となり、ECSは`1/1/0`へ到達した
+  - ECR pullは成功し、CloudWatch Logsにログストリームと直近イベントが作成され、PC一覧のDynamoDB読取りが200で完了した
+  - Gemini APIはプロバイダーへ到達したが、Secrets Managerの既存キーが`API_KEY_INVALID`のため成功しなかった
+- **所要秒数**: コールドスタート37.7秒
+- **結果**: PARTIAL（ECR、CloudWatch Logs、DynamoDB、起動・通信はPASS。GeminiのみBLOCKED）
+- **失敗理由**: `GeminiApiKey`の既存APIキーがGoogle APIから`INVALID_ARGUMENT / API_KEY_INVALID`として拒否された
+- **証跡参照**:
+  - ECS service/task state、task pull timestamps、CloudWatch Logs stream、DynamoDB TTL、EventBridge scheduleのサニタイズ済みAWS CLI結果
+  - `scripts/validate-ecs-connectivity.ps1`
+- **秘密情報確認**: 実キー、Authorization、署名、秘密値、API URL、AWSアカウントIDを含まない
+
+### `aws-20261002-signing-rotation`: 内部署名3段階ローテーション
+
+- **実施日時**: 2026-10-02T08:45:46Z〜2026-10-02T08:49:20Z
+- **環境**: staging
+- **関連タスク**: T027
+- **事前条件**:
+  - ECSタスク1件が稼働し、LambdaとECSが同一Secrets Manager Secretを参照
+  - PC、返却記録はともに0件
+- **期待結果**: 現行+次期の双方を受理し、Lambda切替後も正当転送が成功し、旧世代失効後は旧署名だけを拒否する
+- **実結果**:
+  - Secretを2世代化し、現行署名200、次期署名200を確認した
+  - Lambdaを`next`へ切り替え、Lambda経由の正当転送200を確認した
+  - Secretから旧世代を失効させ、旧署名403、次期署名200を確認した
+  - 新世代を`current`へ正規化し、Lambdaを既定`current`へ戻した後も正当転送200を確認した
+  - 全段階の前後でPC、返却記録は0件だった
+- **所要秒数**: 約214秒
+- **結果**: PASS
+- **失敗理由**: N/A
+- **証跡参照**: Secrets Managerの世代数・selector、Lambda環境変数、署名付き/署名なしHTTP statusのサニタイズ済み結果
+- **秘密情報確認**: 実キー、Authorization、署名、秘密値、API URL、公開IP、AWSアカウントIDを含まない
+
+### `aws-20261002-concurrent-start`: 停止状態への10件同時要求
+
+- **実施日時**: 2026-10-02T08:52:20Z〜2026-10-02T08:55:30Z
+- **環境**: staging
+- **関連タスク**: T054
+- **事前条件**:
+  - 停止ゲートを使い、ECSと`SystemActivity/global`を`STOPPED`、`0/0/0`へ整合
+  - 状態変更を伴わない`GET /api/pcs`を使用
+- **期待結果**: 10件の要求を1回の`UpdateService(desiredCount=1)`へ集約し、最終稼働数1、再試行した元操作が1回成功する
+- **実結果**:
+  - 10件すべてが`503 starting`を返し、ECSは1タスクだけを起動して`1/1/0`へ到達した
+  - 起動後の再試行は200となった
+  - CloudTrailの遅延反映後、対象時間帯の`UpdateService(desiredCount=1)`は1回だけだった
+  - `SystemActivity/global`は`generation=2`、`runtimeState=RUNNING`、`inFlightCount=0`となった
+- **所要秒数**: 同時要求開始から再試行成功まで52.8秒
+- **結果**: PASS
+- **失敗理由**: N/A
+- **証跡参照**: 同時要求status集計、ECS service event、CloudTrail件数、DynamoDB状態のサニタイズ済み結果
+- **秘密情報確認**: Authorization、利用者ID、レスポンス本文、AWSアカウントIDを含まない
+
+### `aws-20261002-idle-sleep`: 処理中・異常記録・正常アイドル停止
+
+- **実施日時**: 2026-10-02T08:56:00Z〜2026-10-02T08:58:30Z
+- **環境**: staging
+- **関連タスク**: T063
+- **事前条件**:
+  - ECSは`1/1/0`で稼働
+  - Python 3.9互換のISO 8601小数秒6桁形式で検証時刻を保存
+- **期待結果**: 処理中は停止せず、不正記録はfail-openし、2時間超の正常アイドルでは15分以内に`0/0/0`へ停止する
+- **実結果**:
+  - `inFlightCount=1`では`active / in_flight`となり、ECSは`1/1`を維持した
+  - 不正時刻では`skip / invalid_runtime_activity`となり、ECSは`1/1`を維持した
+  - 正常な3時間アイドルでは`auto_slept`となり、手動判定実行後3分以内に`0/0/0`へ到達した
+  - 最終`SystemActivity/global`は`runtimeState=STOPPED`、`inFlightCount=0`だった
+- **所要秒数**: 3ケース合計約150秒
+- **結果**: PASS
+- **失敗理由**: N/A
+- **証跡参照**: TimeoutCheckLambdaのstatus/reason、ECS desired/running/pending、DynamoDB runtime stateのサニタイズ済み結果
+- **秘密情報確認**: 実キー、Authorization、署名、秘密値、AWSアカウントIDを含まない
+
+### `aws-20261002-gemini-blocker`: Gemini実通信ブロッカー調査
+
+- **実施日時**: 2026-10-02T08:34:00Z〜2026-10-02T08:45:00Z
+- **環境**: staging
+- **関連タスク**: T026, T068
+- **事前条件**: ECSタスクとLambda署名転送は正常
+- **期待結果**: 非機密ダミー入力がGeminiから構造化応答を返す
+- **実結果**:
+  - ECS公開IPへの署名なし要求は403、Lambda署名付き一覧要求は200で、内部境界は正常だった
+  - Gemini要求はLambda経由およびECS直接署名付き要求で完了しなかった
+  - 同じSecrets Managerキーを本文非表示でGoogle APIへ最小要求し、`INVALID_ARGUMENT / API_KEY_INVALID`を確認した
+  - Lambdaプロキシの接続/読取りタイムアウトを3秒/25秒へ明示し、Lambdaテスト23件が成功した
+- **所要秒数**: N/A
+- **結果**: BLOCKED
+- **失敗理由**: 有効なGemini APIキーへの更新が必要
+- **証跡参照**: HTTP status、provider status/reason、Lambda/ECSログの秘密情報非露出チェック
+- **秘密情報確認**: APIキー、Authorization、署名、秘密値、API URL、公開IP、AWSアカウントIDを含まない

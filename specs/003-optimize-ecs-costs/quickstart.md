@@ -225,9 +225,9 @@ PC登録とPC返却について次を実施する。
 
 秘密ローテーションは次の3段階を順番に検証し、各段階の正当な内部転送成功率と使用`keyId`を記録する。
 
-1. ECSへ次期秘密を追加し、現行・次期の2世代を検証可能にする。現行秘密で署名するLambdaの要求が100%成功することを確認する。
-2. Lambdaを次期秘密へ切り替え、次期秘密の要求が100%成功することを確認する。
-3. ECSから旧秘密を削除して失効させ、次期秘密の要求が100%成功し、旧秘密の要求が100%拒否されることを確認する。
+1. `InternalProxySigningSecret`へ`current`と`next`を登録し、現行・次期の2世代を検証可能にする。`internalProxyKeyId=current`（既定値）でデプロイされたLambdaの要求が100%成功することを確認する。
+2. `infrastructure`で`cdk diff LambdaStack EcsStack -c internalProxyKeyId=next`を確認後、`cdk deploy LambdaStack EcsStack -c internalProxyKeyId=next`を実行する。次期秘密の要求が100%成功することを確認する。不正なselectorはsynth時に拒否される。
+3. `InternalProxySigningSecret`から旧世代を削除して失効させ、次期秘密の要求が100%成功し、旧秘密の要求が100%拒否されることを確認する。次回ローテーション前に、新世代を`current`へ正規化して`internalProxyKeyId=current`へ戻す計画を記録する。
 
 いずれかの段階で正当な転送が失敗した場合は次段階へ進まず、旧秘密を失効させない。秘密値そのものは検証記録へ保存しない。
 

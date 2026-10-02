@@ -9,6 +9,9 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $backupPath = Join-Path $env:TEMP "ecs-idle-backup-$ValidationId.json"
+function Format-PythonIsoUtc([DateTimeOffset]$Value) {
+    return $Value.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.ffffff+00:00')
+}
 aws dynamodb get-item --region $Region --table-name $SystemActivityTable `
     --key '{"entityId":{"S":"global"}}' --consistent-read | Out-File $backupPath -Encoding utf8
 
@@ -20,20 +23,22 @@ $cases = @(
 
 try {
     foreach ($case in $cases) {
-        $lastActivity = [DateTimeOffset]::UtcNow.AddSeconds(-$case.OffsetSeconds).ToString('o')
+        $lastActivity = Format-PythonIsoUtc ([DateTimeOffset]::UtcNow.AddSeconds(-$case.OffsetSeconds))
         $item = @{
             entityId = @{ S = 'global' }
             runtimeState = @{ S = 'RUNNING' }
             generation = @{ N = '1' }
             inFlightCount = @{ N = [string]$case.InFlight }
             lastActivityAt = @{ S = $lastActivity }
-            lastStateChangedAt = @{ S = [DateTimeOffset]::UtcNow.ToString('o') }
+            lastStateChangedAt = @{ S = Format-PythonIsoUtc ([DateTimeOffset]::UtcNow) }
         } | ConvertTo-Json -Compress -Depth 5
         aws dynamodb put-item --region $Region --table-name $SystemActivityTable --item $item | Out-Null
         $payloadPath = Join-Path $env:TEMP "ecs-idle-$($case.Name).json"
         aws lambda invoke --region $Region --function-name $TimeoutCheckFunctionName `
             --cli-binary-format raw-in-base64-out --payload '{}' $payloadPath | Out-Null
-        Write-Output "Case=$($case.Name) Result=$(Get-Content $payloadPath -Raw)"
+        $invokeResult = Get-Content $payloadPath -Raw | ConvertFrom-Json
+        $resultBody = $invokeResult.body | ConvertFrom-Json
+        Write-Output "Case=$($case.Name) Status=$($resultBody.status) Reason=$($resultBody.reason)"
         Remove-Item $payloadPath -Force
     }
 } finally {

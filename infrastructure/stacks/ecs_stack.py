@@ -14,12 +14,31 @@ class EcsStack(Stack):
                  system_activity_table=None, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
+        internal_proxy_key_id = self.node.try_get_context("internalProxyKeyId") or "current"
+        if internal_proxy_key_id not in {"current", "next"}:
+            raise ValueError("internalProxyKeyId must be 'current' or 'next'")
+
         # VPCの作成
         vpc = ec2.Vpc(
             self, "PCManagementVPC",
             cidr="10.0.0.0/16",
             max_azs=2,
             nat_gateways=0,
+            subnet_configuration=[
+                ec2.SubnetConfiguration(
+                    name="Public",
+                    subnet_type=ec2.SubnetType.PUBLIC,
+                    cidr_mask=18,
+                ),
+                ec2.SubnetConfiguration(
+                    # Keep the existing construct name so CloudFormation retains
+                    # the deployed subnet and route-table logical IDs while the
+                    # NAT routes are removed.
+                    name="Private",
+                    subnet_type=ec2.SubnetType.PRIVATE_ISOLATED,
+                    cidr_mask=18,
+                ),
+            ],
         )
 
         # Gemini API キーのシークレット参照
@@ -64,7 +83,7 @@ class EcsStack(Stack):
                 "IDLE_TIMEOUT_SECONDS": "7200",
                 "RETRY_MAX_SECONDS": "180",
                 "INTERNAL_PROXY_SECRET_ARN": internal_proxy_secret.secret_arn,
-                "INTERNAL_PROXY_KEY_ID": "current",
+                "INTERNAL_PROXY_KEY_ID": internal_proxy_key_id,
             },
             secrets={
                 "GEMINI_API_KEY": ecs.Secret.from_secrets_manager(gemini_secret, "GeminiApiKey")

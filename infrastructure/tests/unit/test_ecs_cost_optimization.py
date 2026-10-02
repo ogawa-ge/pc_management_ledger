@@ -38,3 +38,19 @@ def test_fargate_service_keeps_public_network_egress():
             }
         },
     )
+
+
+def test_existing_private_subnet_logical_ids_are_preserved_without_nat_routes():
+    template_json = _template().to_json()
+    resource_ids = set(template_json["Resources"])
+
+    assert "PCManagementVPCPrivateSubnet1Subnet1AF6C333" in resource_ids
+    assert "PCManagementVPCPrivateSubnet2Subnet42B2153A" in resource_ids
+    assert "PCManagementVPCPrivateSubnet1RouteTable2524BA4A" in resource_ids
+    assert "PCManagementVPCPrivateSubnet2RouteTable62111BA4" in resource_ids
+    assert not any("IsolatedSubnet" in resource_id for resource_id in resource_ids)
+    assert not any(
+        resource_id.startswith("PCManagementVPCPrivateSubnet")
+        and "DefaultRoute" in resource_id
+        for resource_id in resource_ids
+    )

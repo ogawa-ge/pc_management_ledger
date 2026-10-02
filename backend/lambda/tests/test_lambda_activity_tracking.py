@@ -34,11 +34,11 @@ def configure_proxy(monkeypatch, status=200, raises=None):
     else:
         http.request.return_value = response
     monkeypatch.setattr(main.urllib3, "PoolManager", lambda: http)
-    return manager
+    return manager, http
 
 
 def test_successful_proxy_tracks_accept_in_flight_and_completion(monkeypatch):
-    manager = configure_proxy(monkeypatch, status=200)
+    manager, http = configure_proxy(monkeypatch, status=200)
 
     response = TestClient(main.app).get("/api/pcs")
 
@@ -49,10 +49,13 @@ def test_successful_proxy_tracks_accept_in_flight_and_completion(monkeypatch):
     )
     manager.begin_in_flight.assert_called_once_with()
     manager.finish_in_flight.assert_called_once_with(succeeded=True)
+    timeout = http.request.call_args.kwargs["timeout"]
+    assert timeout.connect_timeout == 3.0
+    assert timeout.read_timeout == 25.0
 
 
 def test_non_success_proxy_decrements_without_success_activity(monkeypatch):
-    manager = configure_proxy(monkeypatch, status=409)
+    manager, _http = configure_proxy(monkeypatch, status=409)
 
     response = TestClient(main.app).get("/api/pcs")
 
@@ -61,7 +64,7 @@ def test_non_success_proxy_decrements_without_success_activity(monkeypatch):
 
 
 def test_proxy_exception_still_decrements_in_flight(monkeypatch):
-    manager = configure_proxy(monkeypatch, raises=RuntimeError("network unavailable"))
+    manager, _http = configure_proxy(monkeypatch, raises=RuntimeError("network unavailable"))
 
     response = TestClient(main.app).get("/api/pcs")
 

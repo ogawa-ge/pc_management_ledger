@@ -15,16 +15,16 @@ $jobs = 1..10 | ForEach-Object {
         try {
             $headers = @{ Authorization = $Token; 'Idempotency-Key' = [guid]::NewGuid().ToString() }
             $response = Invoke-WebRequest -Uri $Endpoint -Headers $headers -Method Get -SkipHttpErrorCheck
-            [pscustomobject]@{ Index = $Index; Status = $response.StatusCode; Body = $response.Content }
+            [pscustomobject]@{ Index = $Index; Status = $response.StatusCode }
         } catch {
-            [pscustomobject]@{ Index = $Index; Status = 'ERROR'; Body = $_.Exception.Message }
+            [pscustomobject]@{ Index = $Index; Status = 'ERROR'; ErrorType = $_.Exception.GetType().Name }
         }
     } -ArgumentList $endpoint, $Authorization, $_
 }
 
 $results = $jobs | Wait-Job | Receive-Job
 $jobs | Remove-Job -Force
-$results | Select-Object Index, Status, Body
+$results | Select-Object Index, Status, ErrorType
 
 aws ecs describe-services --region $Region --cluster $Cluster --services $Service `
     --query 'services[0].{desired:desiredCount,running:runningCount,pending:pendingCount}'

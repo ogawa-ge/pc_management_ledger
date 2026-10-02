@@ -6,8 +6,8 @@ from stacks.ecs_stack import EcsStack
 from stacks.lambda_stack import LambdaStack
 
 
-def _templates():
-    app = cdk.App()
+def _templates(context=None):
+    app = cdk.App(context=context or {})
     database = DatabaseStack(app, "DatabaseStack")
     lambda_stack = LambdaStack(
         app,
@@ -52,3 +52,84 @@ def test_execution_roles_only_receive_get_secret_value_for_internal_secret():
     assert "secretsmanager:GetSecretValue" in combined
     assert "secretsmanager:PutSecretValue" not in combined
     assert "secretsmanager:UpdateSecret" not in combined
+
+
+def test_internal_proxy_signing_generation_defaults_to_current():
+    lambda_template, ecs_template = _templates()
+
+    lambda_template.has_resource_properties(
+        "AWS::Lambda::Function",
+        {
+            "Environment": {
+                "Variables": {
+                    "INTERNAL_PROXY_KEY_ID": "current",
+                }
+            }
+        },
+    )
+    ecs_template.has_resource_properties(
+        "AWS::ECS::TaskDefinition",
+        {
+            "ContainerDefinitions": assertions.Match.array_with(
+                [
+                    assertions.Match.object_like(
+                        {
+                            "Environment": assertions.Match.array_with(
+                                [
+                                    {
+                                        "Name": "INTERNAL_PROXY_KEY_ID",
+                                        "Value": "current",
+                                    }
+                                ]
+                            )
+                        }
+                    )
+                ]
+            )
+        },
+    )
+
+
+def test_internal_proxy_signing_generation_can_switch_to_next():
+    lambda_template, ecs_template = _templates({"internalProxyKeyId": "next"})
+
+    lambda_template.has_resource_properties(
+        "AWS::Lambda::Function",
+        {
+            "Environment": {
+                "Variables": {
+                    "INTERNAL_PROXY_KEY_ID": "next",
+                }
+            }
+        },
+    )
+    ecs_template.has_resource_properties(
+        "AWS::ECS::TaskDefinition",
+        {
+            "ContainerDefinitions": assertions.Match.array_with(
+                [
+                    assertions.Match.object_like(
+                        {
+                            "Environment": assertions.Match.array_with(
+                                [
+                                    {
+                                        "Name": "INTERNAL_PROXY_KEY_ID",
+                                        "Value": "next",
+                                    }
+                                ]
+                            )
+                        }
+                    )
+                ]
+            )
+        },
+    )
+
+
+def test_internal_proxy_signing_generation_rejects_unknown_selector():
+    try:
+        _templates({"internalProxyKeyId": "retired"})
+    except ValueError as error:
+        assert "internalProxyKeyId must be 'current' or 'next'" in str(error)
+    else:
+        raise AssertionError("unknown internal proxy key selector must be rejected")

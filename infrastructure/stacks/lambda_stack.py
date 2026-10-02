@@ -21,6 +21,10 @@ class LambdaStack(Stack):
                  pc_usage_histories_table=None, system_activity_table=None, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
+        internal_proxy_key_id = self.node.try_get_context("internalProxyKeyId") or "current"
+        if internal_proxy_key_id not in {"current", "next"}:
+            raise ValueError("internalProxyKeyId must be 'current' or 'next'")
+
         # Azure AD シークレットの参照
         # 事前に AWS Secrets Manager に 'AzureAdSecrets' という名前で登録されている想定
         azure_ad_secrets = secretsmanager.Secret.from_secret_name_v2(
@@ -53,7 +57,7 @@ class LambdaStack(Stack):
                 "START_LOCK_SECONDS": "180",
                 "RETRY_MAX_SECONDS": "180",
                 "INTERNAL_PROXY_SECRET_ARN": internal_proxy_secret.secret_arn,
-                "INTERNAL_PROXY_KEY_ID": "current",
+                "INTERNAL_PROXY_KEY_ID": internal_proxy_key_id,
             }
         )
 
