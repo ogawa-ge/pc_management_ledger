@@ -39,17 +39,19 @@ def generate_pc_id(owner_id: str, pc_type: str) -> str:
 def create_pc(
     owner_id: str = None,
     pc_type: str = "N",
+    pc_name: Optional[str] = None,
     cpu: Optional[str] = None,
     memory: Optional[str] = None,
     storage: Optional[str] = None,
     os: Optional[str] = None,
     manufacturer: Optional[str] = None,
     model: Optional[str] = None,
+    gpu: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     PCを新規作成する。
 
-    スペック項目（cpu/memory/storage/os/manufacturer/model）は、
+    スペック項目（pc_name/cpu/memory/storage/os/manufacturer/model/gpu）は、
     クライアント側で既に確定済み（Gemini抽出結果、または手動編集後の値）の
     構造化フィールドとして受け取り、ここでは再度Gemini APIを呼び出さない。
     （research.md Decision 4: 手動編集がサーバー側の再抽出で上書きされるのを防ぐため）
@@ -67,12 +69,14 @@ def create_pc(
         pc_id=pc_id,
         owner_id=owner_id,
         type=pc_type,
+        pc_name=pc_name,
         cpu=cpu,
         memory=memory,
         storage=storage,
         os=os,
         manufacturer=manufacturer,
         model=model,
+        gpu=gpu,
         created_at=datetime.now().isoformat(),
         updated_at=datetime.now().isoformat()
     )

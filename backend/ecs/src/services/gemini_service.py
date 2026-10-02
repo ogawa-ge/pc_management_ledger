@@ -41,21 +41,25 @@ def _build_prompt(specs_text: str) -> str:
 以下のフィールドを含めてください。項目が見当たらない場合は、文脈から推測（例: MacBookならmacOS）するか、null を設定してください。
 
 - cpu: プロセッサ名（例: Intel Core i7-1260P）
-- memory: メモリ容量（数値のみ、単位はGB。例: 16）
-- storage: ストレージ容量（数値のみ、単位はGB。例: 512）
+- memory: メモリ容量（数値のみ、単位はGB、小数点第1位まで。例: 16.0）
+- storage: ストレージ容量（数値のみ、単位はGB、小数点第1位まで。例: 512.0）
 - os: OS名（例: Windows 11 Pro, macOS, Ubuntu）
 - manufacturer: メーカー名（例: Dell, HP, Lenovo, Apple）
 - model: モデル名（例: XPS 13, ThinkPad X1 Carbon）
+- gpu: グラフィックスカード名（例: NVIDIA GeForce RTX 4060, Intel UHD Graphics 620）
+- pcName: PCの名前（コンピューター名。例: DESKTOP-ABC1234, 20022122-0）
 
 必ず以下の形式のJSONのみを返してください。単位記号などは含めず、数値のみを返してください。
 
 {{
   "cpu": "...",
-  "memory": 16,
-  "storage": 512,
+  "memory": 16.0,
+  "storage": 512.0,
   "os": "...",
   "manufacturer": "...",
-  "model": "..."
+  "model": "...",
+  "gpu": "...",
+  "pcName": "..."
 }}
 
 テキスト:

@@ -90,11 +90,14 @@ const PCRegisterPage = () => {
 
       // FR-004: 判断可能な項目のみをフォームへ反映する（取得できなかった項目は空欄のまま）
       setCpu(result.cpu != null ? String(result.cpu) : '');
-      setMemory(result.memory != null ? String(result.memory) : '');
-      setStorage(result.storage != null ? String(result.storage) : '');
+      // メモリ・ストレージはGB・小数点第1位までの表示に統一する（AIの推論結果の精度までは求めない）
+      setMemory(result.memory != null && !Number.isNaN(Number(result.memory)) ? Number(result.memory).toFixed(1) : '');
+      setStorage(result.storage != null && !Number.isNaN(Number(result.storage)) ? Number(result.storage).toFixed(1) : '');
       setOs(result.os != null ? String(result.os) : '');
       setManufacturer(result.manufacturer != null ? String(result.manufacturer) : '');
       setModel(result.model != null ? String(result.model) : '');
+      setGpu(result.gpu != null ? String(result.gpu) : '');
+      setPcName(result.pcName != null ? String(result.pcName) : '');
     } catch (error) {
       console.error('スペック抽出エラー:', error);
       setExtractionError('AIによる自動抽出中に通信エラーが発生しました。手動で入力してください。');
@@ -119,7 +122,7 @@ const PCRegisterPage = () => {
       // FR-005: 自動反映後に手動で編集された値も含め、現在のフォームstateから登録データを構築する
       const result = await registerPC(
         ownerId,
-        { cpu, memory, storage, os, manufacturer, model },
+        { cpu, memory, storage, os, manufacturer, model, gpu, pcName },
         'N'
       );
 
@@ -136,8 +139,20 @@ const PCRegisterPage = () => {
     }
   };
 
-  // 仮のコマンド
-  const terminalCommand = `powershell -Command "Get-ComputerInfo | Select-Object WindowsProductName, WindowsVersion, TotalPhysicalMemory, BiosSerialNumber, ProcessorName, GPUName | ConvertTo-Json"`;
+  // Get-ComputerInfoの実プロパティ名は要求仕様の項目名と異なる
+  // (TotalPhysicalMemory→CsTotalPhysicalMemory、ProcessorName→CsProcessors配下のName、
+  //  GPUNameはGet-ComputerInfoに存在せずWin32_VideoControllerが必要)ため、
+  // 出力キー名は仕様通りに保ちつつ実プロパティから値を詰め替える。
+  // BIOSシリアル番号はGet-ComputerInfoのプロパティ名がPowerShellのバージョンにより
+  // BiosSerialNumber/BiosSeralNumber(スペルミス)で揺れるため、バージョン非依存のWin32_BIOSから取得する。
+  // メーカー・モデル・PC名はGet-ComputerInfoのCsManufacturer/CsModel/CsNameから取得。
+  // ストレージ総容量はGet-ComputerInfoに存在しないため、Win32_DiskDriveの合計サイズ(バイト値)を取得し、
+  // メモリ容量と同様にGBへの変換はGemini側のプロンプト指示（AIの推論）に委ねる。
+  // WindowsProductName（Get-ComputerInfoの値）はレジストリのProductName文字列をそのまま返すが、
+  // Windows 11でも"Windows 10 ..."のままになっているOS側の既知の不具合がある。
+  // 代わりにWin32_OperatingSystemのCaptionを使うと、実機のバージョンに応じた正しい値
+  // （例: "Microsoft Windows 11 Pro"）が取得できるため、こちらを取得元とする。
+  const terminalCommand = `$info = Get-ComputerInfo; $osCaption = (Get-CimInstance Win32_OperatingSystem | Select-Object -ExpandProperty Caption); $gpu = (Get-CimInstance Win32_VideoController | Select-Object -First 1 -ExpandProperty Name); $bios = (Get-CimInstance Win32_BIOS | Select-Object -ExpandProperty SerialNumber); $storageBytes = (Get-CimInstance Win32_DiskDrive | Measure-Object -Property Size -Sum).Sum; [PSCustomObject]@{WindowsProductName=$osCaption; WindowsVersion=$info.WindowsVersion; TotalPhysicalMemory=$info.CsTotalPhysicalMemory; BiosSerialNumber=$bios; ProcessorName=($info.CsProcessors | Select-Object -First 1 -ExpandProperty Name); GPUName=$gpu; Manufacturer=$info.CsManufacturer; Model=$info.CsModel; PCName=$info.CsName; StorageTotalBytes=$storageBytes} | ConvertTo-Json`;
 
   return (
     <div className="pc-register-page">
@@ -145,7 +160,7 @@ const PCRegisterPage = () => {
 
       <div className="terminal-section">
         <h2>スペック取得コマンド</h2>
-        <p>以下のコマンドを実行して、PCのスペック情報を取得してください。</p>
+        <p>以下のコマンドをPowerShell(コマンドプロンプトではなくPowerShell)に貼り付けて実行し、PCのスペック情報を取得してください。</p>
         <TerminalCommand command={terminalCommand} />
 
         <div className="form-group mt-4">
@@ -251,7 +266,7 @@ const PCRegisterPage = () => {
             </div>
 
             <div className="form-group">
-              <label htmlFor="memory">メモリ *</label>
+              <label htmlFor="memory">メモリ (GB) *</label>
               <input
                 type="text"
                 id="memory"
@@ -262,7 +277,7 @@ const PCRegisterPage = () => {
             </div>
 
             <div className="form-group">
-              <label htmlFor="storage">ストレージ *</label>
+              <label htmlFor="storage">ストレージ (GB) *</label>
               <input
                 type="text"
                 id="storage"

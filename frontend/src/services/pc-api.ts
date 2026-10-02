@@ -9,6 +9,8 @@ export interface PcSpecs {
   os?: string | null;
   manufacturer?: string | null;
   model?: string | null;
+  gpu?: string | null;
+  pcName?: string | null;
 }
 
 // parse-specsが失敗した場合のレスポンス（FR-007: 3回リトライ後もエラーの場合 retriesExhausted が true になる）

@@ -106,12 +106,14 @@ def create_pc_endpoint(request: PcCreateRequest) -> Pc:
         result_dict = create_pc(
             owner_id=request.owner_id,
             pc_type=request.pc_type,
+            pc_name=request.pc_name,
             cpu=request.cpu,
             memory=request.memory,
             storage=request.storage,
             os=request.os,
             manufacturer=request.manufacturer,
             model=request.model,
+            gpu=request.gpu,
         )
         return Pc(**result_dict)
     except Exception as e:
