@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { PC } from '@/types/pc';
 import Link from 'next/link';
 import { getStatusDisplay, getStatusColor } from '@/lib/utils';
@@ -21,6 +21,7 @@ const PcsPage: React.FC<PcsPageProps> = ({ initialPcs = [] }) => {
   const [pcsList, setPcsList] = useState<PC[]>(initialPcs);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isStartingUp, setIsStartingUp] = useState(false);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -28,29 +29,61 @@ const PcsPage: React.FC<PcsPageProps> = ({ initialPcs = [] }) => {
     }
   }, [status, router]);
 
-  useEffect(() => {
-    if (status !== 'authenticated') return;
-
-    const fetchPcs = async () => {
-      setLoading(true);
-      try {
-        // API呼び出し (T029で実装した /api/pcs を想定)
-        const response = await fetch('/api/pcs');
-        if (!response.ok) {
-          throw new Error('Failed to fetch PC list');
+  const fetchPcs = useCallback(async (retryCount = 0, isManualRetry = false) => {
+    if (retryCount === 0 || isManualRetry) setLoading(true);
+    setError(null);
+    try {
+      // API呼び出し (T029で実装した /api/pcs を想定)
+      const response = await fetch('/api/pcs');
+      
+      if (!response.ok) {
+        if (!isManualRetry && response.status === 503 && retryCount < 3) {
+          setIsStartingUp(true);
+          setTimeout(() => {
+            fetchPcs(retryCount + 1, false);
+          }, 5000);
+          return;
         }
-        const data: PC[] = await response.json();
-        setPcsList(data);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'PC一覧の取得に失敗しました。');
-      } finally {
+        
+        let errorMessage = 'PC一覧の取得に失敗しました。サーバーに一時的に接続できません。';
+        if (response.status === 401 || response.status === 403) {
+          errorMessage = 'アクセス権限がありません。ログイン状態を確認してください。';
+        } else if (response.status >= 500) {
+          errorMessage = 'サーバーでエラーが発生しました。しばらく経ってから再試行してください。';
+        }
+        setIsStartingUp(false);
+        setError(errorMessage);
         setLoading(false);
+        return;
       }
-    };
-    fetchPcs();
-  }, [status]);
+      
+      const data: PC[] = await response.json();
+      setPcsList(data);
+      setIsStartingUp(false);
+      setLoading(false);
+    } catch {
+      setIsStartingUp(false);
+      setError('PC一覧の取得に失敗しました。サーバーに一時的に接続できません。');
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (status === 'authenticated') {
+      fetchPcs();
+    }
+  }, [status, fetchPcs]);
 
   if (status === 'loading' || loading) {
+    if (isStartingUp) {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <p className="text-gray-600 font-medium">サーバー起動中...</p>
+          <p className="text-sm text-gray-400">しばらくお待ちください（最大15秒程度）</p>
+        </div>
+      );
+    }
     return <div className="p-8 text-center">読み込み中です...</div>;
   }
 
@@ -59,7 +92,18 @@ const PcsPage: React.FC<PcsPageProps> = ({ initialPcs = [] }) => {
   }
 
   if (error) {
-    return <div className="p-8 text-red-600">エラーが発生しました: {error}</div>;
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4 p-8 text-center">
+        <p className="text-red-600 font-medium">{error}</p>
+        <Button 
+          onClick={() => fetchPcs(0, true)} 
+          variant="outline" 
+          className="border-red-600 text-red-600 hover:bg-red-50"
+        >
+          再試行
+        </Button>
+      </div>
+    );
   }
 
   return (

@@ -4,8 +4,8 @@
 
 **Purpose**: Project initialization and basic structure
 
-- [ ] T001 既存の Next.js プロジェクト環境と依存関係の確認
-- [ ] T002 `frontend/src/app/pcs/page.tsx` の現在のフェッチロジック（SWR等）の構造把握
+- [x] T001 既存の Next.js プロジェクト環境と依存関係の確認
+- [x] T002 `frontend/src/app/pcs/page.tsx` の現在のフェッチロジック（SWR等）の構造把握
 
 ---
 
@@ -14,7 +14,7 @@
 **Purpose**: Core infrastructure that MUST be complete before ANY user story can be implemented
 *(※本Issueは既存機能の改修であるため、基盤の大幅な変更はありません)*
 
-- [ ] T003 `page.tsx` に利用する Tailwind CSS のスピナーアイコン（`animate-spin`）の選定・準備
+- [x] T003 `page.tsx` に利用する Tailwind CSS のスピナーアイコン（`animate-spin`）の選定・準備
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 
@@ -28,9 +28,9 @@
 
 ### Implementation for User Story 1
 
-- [ ] T004 [US1] `frontend/src/app/pcs/page.tsx` のフェッチ処理で HTTP 503 レスポンスをハンドリングするロジックの追加
-- [ ] T005 [US1] 503エラー時にエラーをスローせず、`setTimeout` を用いた5秒間隔・最大3回のポーリング処理を実装
-- [ ] T006 [US1] 自動リトライ中に表示する「サーバー起動中...」のテキストおよびスピナーUIの実装
+- [x] T004 [US1] `frontend/src/app/pcs/page.tsx` のフェッチ処理で HTTP 503 レスポンスをハンドリングするロジックの追加
+- [x] T005 [US1] 503エラー時にエラーをスローせず、`setTimeout` を用いた5秒間隔・最大3回のポーリング処理を実装
+- [x] T006 [US1] 自動リトライ中に表示する「サーバー起動中...」のテキストおよびスピナーUIの実装
 
 **Checkpoint**: At this point, User Story 1 should be fully functional and testable independently
 
@@ -44,9 +44,9 @@
 
 ### Implementation for User Story 2
 
-- [ ] T007 [US2] 503以外のエラー（500/502等）やポーリング上限到達時にエラーメッセージステートを更新する処理の実装
-- [ ] T008 [US2] 未加工のエラーメッセージを隠蔽し、「PC一覧の取得に失敗しました。サーバーに一時的に接続できません。」というテキストを表示するUI実装
-- [ ] T009 [US2] 単発フェッチを行う「再試行」ボタン（Tailwind適用）のUI配置および `onClick` イベントの実装
+- [x] T007 [US2] 503以外のエラー（500/502等）やポーリング上限到達時にエラーメッセージステートを更新する処理の実装
+- [x] T008 [US2] 未加工のエラーメッセージを隠蔽し、ステータスコードに応じたメッセージの分岐処理（500/502/401/403等）を含め、適切なテキストを表示するUI実装
+- [x] T009 [US2] 単発フェッチを行う「再試行」ボタン（Tailwind適用）のUI配置および `onClick` イベントの実装
 
 **Checkpoint**: At this point, User Stories 1 AND 2 should both work independently
 
@@ -56,8 +56,8 @@
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] T010 [P] モックサーバー等を利用した総合的な手動テストの実施（503から正常復帰のフロー、503から上限到達のフロー）
-- [ ] T011 [P] コンポーネントのコードクリーンアップ（不要なコメントの削除等）
+- [x] T010 [P] モックサーバー等を利用した総合的な手動テストの実施（503から正常復帰のフロー、503から上限到達のフロー）
+- [x] T011 [P] コンポーネントのコードクリーンアップ（不要なコメントの削除等）
 
 ---
 
@@ -83,18 +83,8 @@
 
 ### Parallel Opportunities
 
-- 全ての [P] タスクは並行して実行可能。
-- T006 (UI実装) と T004/T005 (ロジック実装) は担当者が分かれていれば並行可能。
-
----
-
-## Parallel Example: User Story 1
-
-```bash
-# ロジックとUIを並行して実装する場合の例
-Task: "503レスポンスのハンドリングとポーリングロジックの実装" (T004, T005)
-Task: "スピナーと待機テキストのコンポーネント作成" (T006)
-```
+- [P] マークが付いたタスク（Phase N のテスト・クリーンアップ等）は並行して実行可能。
+- `T004`〜`T009` はコンフリクト防止のため同一ファイル（`frontend/src/app/pcs/page.tsx`）に対する変更に限定されているため、順次（Sequential）実装とする。
 
 ---
 
