@@ -37,7 +37,7 @@ class LambdaStack(Stack):
             entry=lambda_src_dir,  # lambda フォルダを指定。直下に requirements.txt がある
             index="src/main.py",   # エントリポイントのファイル
             handler="lambda_handler",
-            runtime=_lambda.Runtime.PYTHON_3_9,
+            runtime=_lambda.Runtime.PYTHON_3_12,
             timeout=Duration.seconds(30),
             environment={
                 "USERS_TABLE_NAME": users_table.table_name if users_table else "Users",
@@ -125,7 +125,7 @@ class LambdaStack(Stack):
             entry=lambda_src_dir,
             index="src/services/ecs_manager.py",
             handler="lambda_handler_cloudwatch_timeout_check",
-            runtime=_lambda.Runtime.PYTHON_3_9,
+            runtime=_lambda.Runtime.PYTHON_3_12,
             timeout=Duration.seconds(30),
         )
 
