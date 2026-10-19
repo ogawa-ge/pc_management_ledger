@@ -7,6 +7,8 @@ import { getStatusDisplay, getStatusColor } from '@/lib/utils';
 import { signOut, useSession } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
+import ECSLoadingState, { useECSLoadingState } from '@/components/ecs-loading-state';
+import { getPCs } from '@/services/pc-api';
 
 // 型定義のインポートを想定
 // 実際には、PCのデータ構造に合わせて調整が必要です。
@@ -21,6 +23,7 @@ const PcsPage: React.FC<PcsPageProps> = ({ initialPcs = [] }) => {
   const [pcsList, setPcsList] = useState<PC[]>(initialPcs);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const ecsLoading = useECSLoadingState();
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -35,11 +38,13 @@ const PcsPage: React.FC<PcsPageProps> = ({ initialPcs = [] }) => {
       setLoading(true);
       try {
         // API呼び出し (T029で実装した /api/pcs を想定)
-        const response = await fetch('/api/pcs');
-        if (!response.ok) {
-          throw new Error('Failed to fetch PC list');
-        }
-        const data: PC[] = await response.json();
+        const data = await getPCs(undefined, {
+          onRetryStateChange: (retry) => {
+            ecsLoading.setStatus(retry.status === 'idle' ? 'starting' : retry.status);
+            ecsLoading.setRemainingSeconds(retry.remainingSeconds);
+            ecsLoading.setIsLoading(retry.status !== 'idle');
+          },
+        });
         setPcsList(data);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'PC一覧の取得に失敗しました。');
@@ -63,6 +68,12 @@ const PcsPage: React.FC<PcsPageProps> = ({ initialPcs = [] }) => {
   }
 
   return (
+    <>
+    <ECSLoadingState
+      isLoading={ecsLoading.isLoading}
+      status={ecsLoading.status}
+      remainingSeconds={ecsLoading.remainingSeconds}
+    />
     <div className="container mx-auto p-6">
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-4">
@@ -156,6 +167,7 @@ const PcsPage: React.FC<PcsPageProps> = ({ initialPcs = [] }) => {
         </table>
       </div>
     </div>
+    </>
   );
 };
 

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { ApiError, getUsers, parseSpecs, registerPC, PcSpecsError } from '@/services/pc-api';
 import { User } from '@/types/user';
+import ECSLoadingState, { useECSLoadingState } from '@/components/ecs-loading-state';
 
 const getUserLabel = (user: User): string => {
   if (user.name && user.email) return `${user.name} (${user.email})`;
@@ -33,6 +34,7 @@ const PCRegisterPage = () => {
   const [registrationError, setRegistrationError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const ecsLoading = useECSLoadingState();
   const router = useRouter();
 
   // 貼り付け入力欄（ユビキタス言語: 「貼り付け入力欄」）とAI自動抽出まわりの状態
@@ -93,7 +95,14 @@ const PCRegisterPage = () => {
 
     setIsExtracting(true);
     try {
-      const result = await parseSpecs(terminalOutput);
+      const retryOptions = {
+        onRetryStateChange: (retry: { status: 'idle' | 'starting' | 'processing' | 'timeout'; remainingSeconds: number }) => {
+          ecsLoading.setStatus(retry.status === 'idle' ? 'starting' : retry.status);
+          ecsLoading.setRemainingSeconds(retry.remainingSeconds);
+          ecsLoading.setIsLoading(retry.status !== 'idle');
+        },
+      };
+      const result = await parseSpecs(terminalOutput, retryOptions);
 
       if ('error' in result) {
         const errorResult = result as PcSpecsError;
@@ -142,14 +151,21 @@ const PCRegisterPage = () => {
     setRegistrationError(null);
 
     try {
+      const retryOptions = {
+        onRetryStateChange: (retry: { status: 'idle' | 'starting' | 'processing' | 'timeout'; remainingSeconds: number }) => {
+          ecsLoading.setStatus(retry.status === 'idle' ? 'starting' : retry.status);
+          ecsLoading.setRemainingSeconds(retry.remainingSeconds);
+          ecsLoading.setIsLoading(retry.status !== 'idle');
+        },
+      };
       // FR-005: 自動反映後に手動で編集された値も含め、現在のフォームstateから登録データを構築する
       const result = await registerPC(
         ownerId,
         { cpu, memory, storage, os, manufacturer, model, gpu, pcName },
         'N',
-        session?.user?.id
+        session?.user?.id,
+        retryOptions,
       );
-
       console.log('登録成功:', result);
       setSubmitSuccess(true);
       // 登録成功後に一覧ページにリダイレクト
@@ -187,6 +203,12 @@ const PCRegisterPage = () => {
   const terminalCommand = `$info = Get-ComputerInfo; $osCaption = (Get-CimInstance Win32_OperatingSystem | Select-Object -ExpandProperty Caption); $gpu = (Get-CimInstance Win32_VideoController | Select-Object -First 1 -ExpandProperty Name); $bios = (Get-CimInstance Win32_BIOS | Select-Object -ExpandProperty SerialNumber); $storageBytes = (Get-CimInstance Win32_DiskDrive | Measure-Object -Property Size -Sum).Sum; [PSCustomObject]@{WindowsProductName=$osCaption; WindowsVersion=$info.WindowsVersion; TotalPhysicalMemory=$info.CsTotalPhysicalMemory; BiosSerialNumber=$bios; ProcessorName=($info.CsProcessors | Select-Object -First 1 -ExpandProperty Name); GPUName=$gpu; Manufacturer=$info.CsManufacturer; Model=$info.CsModel; PCName=$info.CsName; StorageTotalBytes=$storageBytes} | ConvertTo-Json`;
 
   return (
+    <>
+      <ECSLoadingState
+        isLoading={ecsLoading.isLoading}
+        status={ecsLoading.status}
+        remainingSeconds={ecsLoading.remainingSeconds}
+      />
     <div className="pc-register-page">
       <h1>PC登録</h1>
 
@@ -393,6 +415,7 @@ const PCRegisterPage = () => {
         )}
       </div>
     </div>
+    </>
   );
 };
 

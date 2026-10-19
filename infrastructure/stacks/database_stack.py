@@ -56,7 +56,8 @@ class DatabaseStack(Stack):
                 name="entityId",
                 type=dynamodb.AttributeType.STRING
             ),
-            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            time_to_live_attribute="expiresAt",
         )
 
         # テーブルを属性として保持（他スタックからの参照用）

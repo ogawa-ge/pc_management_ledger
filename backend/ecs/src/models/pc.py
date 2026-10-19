@@ -23,7 +23,8 @@ class Pc(BaseApiModel):
 
 
 class PcCreateRequest(BaseApiModel):
-    owner_id: Optional[str] = None
+    owner_id: str
+    specs_text: Optional[str] = None
     pc_type: str = "N"
     pc_name: Optional[str] = None
     cpu: Optional[str] = None
