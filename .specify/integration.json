@@ -3,10 +3,15 @@
   "integration_state_schema": 1,
   "installed_integrations": [
     "cline",
-    "gemini"
+    "gemini",
+    "claude"
   ],
   "integration_settings": {
     "cline": {
+      "script": "ps",
+      "invoke_separator": "-"
+    },
+    "claude": {
       "script": "ps",
       "invoke_separator": "-"
     },
