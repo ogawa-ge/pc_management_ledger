@@ -51,7 +51,7 @@ pytest tests -k sync_user
 | 3 | DynamoDB の `Users` を確認する | `userId`（数字の文字列）・`email`・`name`・`role = User` のアイテムが 1 件ある | US1-2、FR-006 |
 | 4 | ログアウトする | ログイン画面に戻る | US1-5 |
 | 5 | ログアウト状態で `/pcs` に直接アクセスする | ログイン画面にリダイレクトされる | US1-3 |
-| 6 | 個人の Gmail アカウントでログインを試みる | ログイン画面に「会社のGoogleアカウント（@genuine-pt.jp）でログインしてください」と表示される。`Users` にアイテムが増えない | US2-1、US2-3、SC-002 |
+| 6 | 個人の Gmail アカウントでログインを試みる | ログイン画面に「会社のGoogleアカウントでログインしてください」と表示される。`Users` にアイテムが増えない | US2-1、US2-3、SC-002 |
 | 7 | 6 の直後にログを確認する（ローカルはターミナル、本番は CloudWatch Logs） | `"event":"login_rejected"` と、日時・メールアドレスを含む 1 行が出ている | FR-012 |
 | 8 | Google のアカウント選択画面でキャンセルする | ログイン画面に戻り、エラーメッセージは表示されない | Edge Cases |
 | 9 | ログイン処理中に、ECS のタスクを確認する | ECS が起動していない（停止中のままである） | FR-010、SC-004 |
@@ -60,7 +60,7 @@ pytest tests -k sync_user
 
 1. environment-setup.md の 1〜3・5 を設定する。
 2. **`NEXTAUTH_SECRET` を新しい値に変更する。** 旧 Microsoft ログインのセッションが無効になる（research.md R-8）。
-3. CDK をデプロイする（Lambda の環境変数 `ALLOWED_EMAIL_DOMAIN` が設定され、`AzureAdSecrets` の参照が外れる）。デプロイを実行する端末で、環境変数 `ALLOWED_EMAIL_DOMAIN` を設定しておくこと。
+3. CDK をデプロイする（Lambda の環境変数 `ALLOWED_EMAIL_DOMAIN` が設定され、`AzureAdSecrets` の参照が外れる）。デプロイを実行する端末で、環境変数 `ALLOWED_EMAIL_DOMAIN` を設定しておくこと。未設定だとデプロイは成功するが、ログイン時のユーザー登録が失敗してログインできない。デプロイ時の警告を確認すること。
 4. 既存データを削除する（下記「6. 既存データの削除」）。
 5. Amplify を再デプロイする。
 6. 手動での確認シナリオ 1〜9 を本番 URL で実施する。

@@ -79,7 +79,7 @@ Google Workspace ログインに切り替えるときに、事前に設定・変
 
 | 対象 | 設定する値 | 対応 | 備考 |
 |---|---|---|---|
-| Lambda の環境変数 `ALLOWED_EMAIL_DOMAIN` | `genuine-pt.jp` | 追加 | ログイン時のユーザー登録 API でもドメインを再チェックするために使う（research.md R-5）。CDK のデプロイを実行する端末で、環境変数 `ALLOWED_EMAIL_DOMAIN` を設定してからデプロイする。未設定だとデプロイが失敗する |
+| Lambda の環境変数 `ALLOWED_EMAIL_DOMAIN` | `genuine-pt.jp` | 追加 | ログイン時のユーザー登録 API でもドメインを再チェックするために使う（research.md R-5）。CDK のデプロイを実行する端末で、環境変数 `ALLOWED_EMAIL_DOMAIN` を設定してからデプロイする。未設定でもデプロイは成功するが、ログインできなくなる（デプロイ時に警告が出る） |
 | Google のクライアント ID / シークレット | – | 不要 | Google での認証はフロントエンド（Amplify）側で完結するため、Lambda や Secrets Manager に登録する必要はない |
 | [infrastructure/stacks/lambda_stack.py](../../infrastructure/stacks/lambda_stack.py) の `AzureAdSecrets` 参照（環境変数 `AZURE_AD_SECRET_NAME`） | – | 削除 | Lambda のコードからは使われていない。本 Issue の実装でコードから削除する |
 | Secrets Manager 上の `AzureAdSecrets` | – | 削除（CDK デプロイ後） | 上の参照を削除した CDK をデプロイした後に、手動で削除する。先に消すと CDK のデプロイが失敗する |

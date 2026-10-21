@@ -78,12 +78,12 @@
 
   | `error` の値 | 発生条件 | 表示 |
   |---|---|---|
-  | `DomainNotAllowed` | `signIn` コールバックがドメイン判定で拒否（`/login?error=DomainNotAllowed` を返す） | 会社のGoogleアカウント（@genuine-pt.jp）でログインしてください |
+  | `DomainNotAllowed` | `signIn` コールバックがドメイン判定で拒否（`/login?error=DomainNotAllowed` を返す） | 会社のGoogleアカウントでログインしてください |
   | `RegistrationFailed` | `sync-user` の呼び出しに失敗 | しばらくしてから再度お試しください |
   | ユーザーが同意画面・アカウント選択でキャンセルした場合の値 | Google 側でキャンセル | 表示しない（通常のログイン画面） |
   | 上記以外（`OAuthSignin`、`OAuthCallback`、`Callback` など） | Google 側の障害など | しばらくしてから再度お試しください |
 
-  メッセージは固定文言とする（ドメイン名は spec で決定済みのため、画面文言に含めてよい）。許可ドメインをブラウザ側に渡すための `NEXT_PUBLIC_` 付き環境変数は作らない。
+  メッセージは固定文言とし、ドメイン名は含めない（FR-003）。許可ドメインをブラウザ側に渡すための `NEXT_PUBLIC_` 付き環境変数は作らない。
 - **Rationale**: 内部のエラー詳細を出さない（FR-008）。キャンセル時はエラー扱いしない（Edge Cases）。
 - **Note**: キャンセル時に NextAuth v4 が付ける `error` の値は、実装時に実機で確認して確定する（tasks で確認タスクを設ける）。
 
@@ -102,7 +102,7 @@
 
 - **Decision**:
   - `frontend`: `AzureADProvider` の import と `oid` の付け替え処理を削除する。`session.accessToken` は利用箇所が無く、Google のアクセストークンをブラウザに渡す理由がないため削除する。
-  - `infrastructure/stacks/lambda_stack.py`: `AzureAdSecrets` の参照・`grant_read`・環境変数 `AZURE_AD_SECRET_NAME` を削除し、環境変数 `ALLOWED_EMAIL_DOMAIN` を追加する。値は CDK のデプロイ時に環境変数から読み込み、未設定の場合はデプロイを失敗させる（ソースコードにドメインを書かない、FR-003）。
+  - `infrastructure/stacks/lambda_stack.py`: `AzureAdSecrets` の参照・`grant_read`・環境変数 `AZURE_AD_SECRET_NAME` を削除し、環境変数 `ALLOWED_EMAIL_DOMAIN` を追加する。値は CDK のデプロイ時に環境変数から読み込む（ソースコードにドメインを書かない、FR-003）。未設定の場合はデプロイを続行して警告を出す。他メンバーの CDK デプロイを妨げないためで、未設定のままでも Lambda 側がログインを拒否するため安全側に倒れる。
   - Secrets Manager 上の `AzureAdSecrets`: CDK の参照削除をデプロイした後に、手動で削除してよい（本 Issue のタスクには含めない）。
 - **Rationale**: SC-003（Microsoft の経路が残っていない）。
 
