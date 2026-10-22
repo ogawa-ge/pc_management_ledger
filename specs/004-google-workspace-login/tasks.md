@@ -31,7 +31,7 @@ description: "Task list for ログイン方式のGoogle Workspaceへの変更 (I
 
 **Purpose**: 用語の同期とローカル環境の準備
 
-- [ ] T001 `docs/ubiquitous-language.md` の「1. ユーザー・権限関連」の **User** 行の定義を「システムを利用する人物。Google Workspace アカウント（`@genuine-pt.jp`）でログインする。」に変更し、備考に「`userId` は Google の `sub`」を追記する（FR-011、Constitution L3 Ubiquitous Language。実装前に行う）
+- [X] T001 `docs/ubiquitous-language.md` の「1. ユーザー・権限関連」の **User** 行の定義を「システムを利用する人物。Google Workspace アカウント（`@genuine-pt.jp`）でログインする。」に変更し、備考に「`userId` は Google の `sub`」を追記する（FR-011、Constitution L3 Ubiquitous Language。実装前に行う）
 - [ ] T002 [P] 開発者のローカル環境の `frontend/.env.local`（git 管理外）から `AZURE_AD_*` を削除し、`GOOGLE_CLIENT_ID`・`GOOGLE_CLIENT_SECRET`・`ALLOWED_EMAIL_DOMAIN=genuine-pt.jp` を追加する（environment-setup.md「3」。リポジトリにはコミットしない）
 
 ---
