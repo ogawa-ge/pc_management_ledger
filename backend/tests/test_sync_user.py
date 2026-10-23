@@ -102,3 +102,75 @@ class TestSyncUser:
             auth_service.sync_user(user_id, email, None)
 
         users_table.update_item.assert_not_called()
+
+
+class TestIsAllowedEmailDomain:
+    @pytest.mark.parametrize(
+        "email, expected",
+        [
+            (f"taro@{ALLOWED_DOMAIN}", True),
+            ("Taro@EXAMPLE.CO.JP", True),
+            ("taro@gmail.com", False),
+            (f"taro@sub.{ALLOWED_DOMAIN}", False),
+            (f"taro@{ALLOWED_DOMAIN}.evil.com", False),
+            (f"taro@x{ALLOWED_DOMAIN}", False),
+            ("taro", False),
+            ("taro@", False),
+            ("", False),
+        ],
+    )
+    def test_domain_must_match_exactly(self, email, expected):
+        assert auth_service.is_allowed_email_domain(email, ALLOWED_DOMAIN) is expected
+
+    def test_empty_allowed_domain_rejects_everything(self):
+        assert auth_service.is_allowed_email_domain(f"taro@{ALLOWED_DOMAIN}", "") is False
+
+
+class TestSyncUserEndpoint:
+    @pytest.fixture
+    def api_client(self):
+        from fastapi.testclient import TestClient
+        from src.main import app
+
+        return TestClient(app)
+
+    def test_allowed_domain_is_registered(self, api_client, users_table, monkeypatch):
+        monkeypatch.setenv("ALLOWED_EMAIL_DOMAIN", ALLOWED_DOMAIN)
+        return_attributes_as_new_user(users_table)
+
+        response = api_client.post(
+            "/api/auth/sync-user",
+            json={"userId": "google-sub-101", "email": f"taro@{ALLOWED_DOMAIN}", "name": "Taro"},
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"userId": "google-sub-101", "role": "User", "created": True}
+
+    def test_disallowed_domain_returns_403_without_writing(self, api_client, users_table, monkeypatch, capsys):
+        monkeypatch.setenv("ALLOWED_EMAIL_DOMAIN", ALLOWED_DOMAIN)
+
+        response = api_client.post(
+            "/api/auth/sync-user",
+            json={"userId": "google-sub-102", "email": "taro@gmail.com", "name": "Taro"},
+        )
+
+        assert response.status_code == 403
+        assert response.json() == {"detail": "Email domain is not allowed"}
+        users_table.update_item.assert_not_called()
+        rejection_log = capsys.readouterr().out
+        assert '"event": "login_rejected"' in rejection_log
+        assert '"reason": "domain_not_allowed"' in rejection_log
+        assert '"source": "lambda"' in rejection_log
+        assert "taro@gmail.com" in rejection_log
+
+    def test_missing_allowed_domain_returns_500(self, api_client, users_table, monkeypatch):
+        monkeypatch.delenv("ALLOWED_EMAIL_DOMAIN", raising=False)
+
+        response = api_client.post(
+            "/api/auth/sync-user",
+            json={"userId": "google-sub-103", "email": f"taro@{ALLOWED_DOMAIN}", "name": "Taro"},
+        )
+
+        assert response.status_code == 500
+        assert response.json() == {"detail": "Failed to sync user"}
+        users_table.update_item.assert_not_called()

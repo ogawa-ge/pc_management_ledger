@@ -7,10 +7,14 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 const LOGIN_FAILED_MESSAGE = 'ログインに失敗しました。しばらくしてから再度お試しください';
+const DOMAIN_NOT_ALLOWED_MESSAGE = '会社のGoogleアカウントでログインしてください';
 
 const getLoginErrorMessage = (error: string | null): string | null => {
   if (!error) {
     return null;
+  }
+  if (error === 'DomainNotAllowed') {
+    return DOMAIN_NOT_ALLOWED_MESSAGE;
   }
   return LOGIN_FAILED_MESSAGE;
 };

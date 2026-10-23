@@ -84,13 +84,13 @@ description: "Task list for ログイン方式のGoogle Workspaceへの変更 (I
 
 ### Tests for User Story 2
 
-- [ ] T014 [US2] `backend/tests/test_sync_user.py` に拒否系のテストを追加する。`is_allowed_email_domain` について `@gmail.com`・`@sub.genuine-pt.jp`・`@genuine-pt.jp.example.com`・`@xgenuine-pt.jp`・`@` なし → `False`、`@GENUINE-PT.JP` → `True`、`allowed_domain` が空 → `False`。`POST /api/auth/sync-user` のハンドラ関数について、許可外ドメインで 403 を返し `update_item` が呼ばれないこと、`ALLOWED_EMAIL_DOMAIN` 未設定で 500 を返すこと（quickstart.md「3」の表）
+- [X] T014 [US2] `backend/tests/test_sync_user.py` に拒否系のテストを追加する。`is_allowed_email_domain` について `@gmail.com`・`@sub.genuine-pt.jp`・`@genuine-pt.jp.example.com`・`@xgenuine-pt.jp`・`@` なし → `False`、`@GENUINE-PT.JP` → `True`、`allowed_domain` が空 → `False`。`POST /api/auth/sync-user` のハンドラ関数について、許可外ドメインで 403 を返し `update_item` が呼ばれないこと、`ALLOWED_EMAIL_DOMAIN` 未設定で 500 を返すこと（quickstart.md「3」の表）
 
 ### Implementation for User Story 2
 
-- [ ] T015 [US2] `backend/lambda/src/main.py` の `POST /api/auth/sync-user` で、`sync_user` を呼ぶ前に `os.environ.get("ALLOWED_EMAIL_DOMAIN")` を確認する。未設定・空なら 500 `{"detail": "Failed to sync user"}`。`is_allowed_email_domain` が `False` なら、`print(json.dumps({"event": "login_rejected", "reason": "domain_not_allowed", "email": ..., "timestamp": <UTC ISO 8601>, "source": "lambda"}))` で拒否ログを出し、403 `{"detail": "Email domain is not allowed"}` を返す（research.md R-5・R-6、contracts/api.md「拒否ログの形式」、FR-012）
-- [ ] T016 [US2] `frontend/src/app/api/auth/[...nextauth]/route.ts` の `signIn` コールバックの先頭（`syncUser` より前）で、`isAllowedGoogleAccount({ email: profile.email, emailVerified: profile.email_verified, hostedDomain: profile.hd }, process.env.ALLOWED_EMAIL_DOMAIN ?? '')` を判定する。`false` の場合は `getRejectionReason` の値を使って `console.warn(JSON.stringify({ event: 'login_rejected', reason, email, timestamp, source: 'frontend' }))` を出力し、`'/login?error=DomainNotAllowed'` を返す（`syncUser` は呼ばない）（research.md R-3・R-6、FR-002・FR-004・FR-012、US2 シナリオ 3）
-- [ ] T017 [US2] `frontend/src/app/login/page.tsx` で、`error=DomainNotAllowed` のときに「会社のGoogleアカウントでログインしてください」を表示する（US2 シナリオ 1・2、contracts/api.md）
+- [X] T015 [US2] `backend/lambda/src/main.py` の `POST /api/auth/sync-user` で、`sync_user` を呼ぶ前に `os.environ.get("ALLOWED_EMAIL_DOMAIN")` を確認する。未設定・空なら 500 `{"detail": "Failed to sync user"}`。`is_allowed_email_domain` が `False` なら、`print(json.dumps({"event": "login_rejected", "reason": "domain_not_allowed", "email": ..., "timestamp": <UTC ISO 8601>, "source": "lambda"}))` で拒否ログを出し、403 `{"detail": "Email domain is not allowed"}` を返す（research.md R-5・R-6、contracts/api.md「拒否ログの形式」、FR-012）
+- [X] T016 [US2] `frontend/src/app/api/auth/[...nextauth]/route.ts` の `signIn` コールバックの先頭（`syncUser` より前）で、`isAllowedGoogleAccount({ email: profile.email, emailVerified: profile.email_verified, hostedDomain: profile.hd }, process.env.ALLOWED_EMAIL_DOMAIN ?? '')` を判定する。`false` の場合は `getRejectionReason` の値を使って `console.warn(JSON.stringify({ event: 'login_rejected', reason, email, timestamp, source: 'frontend' }))` を出力し、`'/login?error=DomainNotAllowed'` を返す（`syncUser` は呼ばない）（research.md R-3・R-6、FR-002・FR-004・FR-012、US2 シナリオ 3）
+- [X] T017 [US2] `frontend/src/app/login/page.tsx` で、`error=DomainNotAllowed` のときに「会社のGoogleアカウントでログインしてください」を表示する（US2 シナリオ 1・2、contracts/api.md）
 
 **Checkpoint**: US1・US2 がそろい、本番に出せる状態
 

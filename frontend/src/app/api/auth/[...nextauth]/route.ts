@@ -1,6 +1,7 @@
 import NextAuth, { AuthOptions } from 'next-auth';
 import GoogleProvider, { GoogleProfile } from 'next-auth/providers/google';
 import { get_user_auth_info, syncUser } from '@/lib/auth-service';
+import { getRejectionReason } from '@/lib/email-domain';
 
 export const authOptions: AuthOptions = {
   providers: [
@@ -18,6 +19,25 @@ export const authOptions: AuthOptions = {
   callbacks: {
     async signIn({ profile: rawProfile }) {
       const profile = rawProfile as GoogleProfile | undefined;
+
+      // 許可ドメイン以外のアカウントは、ユーザー登録より前に拒否する
+      const rejectionReason = getRejectionReason(
+        { email: profile?.email, emailVerified: profile?.email_verified, hostedDomain: profile?.hd },
+        process.env.ALLOWED_EMAIL_DOMAIN ?? ''
+      );
+      if (rejectionReason) {
+        console.warn(
+          JSON.stringify({
+            event: 'login_rejected',
+            reason: rejectionReason,
+            email: profile?.email ?? '',
+            timestamp: new Date().toISOString(),
+            source: 'frontend',
+          })
+        );
+        return '/login?error=DomainNotAllowed';
+      }
+
       // Google の sub を userId として Users に登録する（token.sub にも sub が入る）
       try {
         await syncUser({

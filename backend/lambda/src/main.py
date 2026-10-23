@@ -1,5 +1,7 @@
 import json
+import os
 import urllib3
+from datetime import datetime, timezone
 from urllib.parse import urlencode
 from fastapi import FastAPI, Depends, Request, Response
 from fastapi.responses import JSONResponse
@@ -75,7 +77,22 @@ class SyncUserRequest(BaseModel):
 # ログイン時のユーザー登録（ECS を起動しないよう、proxy_to_ecs より前に定義する）
 @app.post("/api/auth/sync-user")
 def sync_user_endpoint(req: SyncUserRequest):
-    from src.services.auth_service import sync_user
+    from src.services.auth_service import is_allowed_email_domain, sync_user
+
+    allowed_email_domain = os.environ.get("ALLOWED_EMAIL_DOMAIN", "").strip()
+    if not allowed_email_domain:
+        print("Error syncing user: ALLOWED_EMAIL_DOMAIN is not set")
+        return JSONResponse(status_code=500, content={"detail": "Failed to sync user"})
+
+    if not is_allowed_email_domain(req.email, allowed_email_domain):
+        print(json.dumps({
+            "event": "login_rejected",
+            "reason": "domain_not_allowed",
+            "email": req.email,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "source": "lambda",
+        }, ensure_ascii=False))
+        return JSONResponse(status_code=403, content={"detail": "Email domain is not allowed"})
 
     try:
         return sync_user(req.userId, req.email, req.name)
