@@ -19,6 +19,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "https://001-pc-management.d2vdxg5wq5iczb.amplifyapp.com",
+        "https://main.dtlqgaeqnt7wq.amplifyapp.com",
     ],
     allow_credentials=True,
     allow_methods=["*"],
