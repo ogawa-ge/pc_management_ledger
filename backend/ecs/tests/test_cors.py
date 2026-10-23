@@ -6,7 +6,6 @@ from src.main import app
 
 @pytest.mark.parametrize("origin", [
     "http://localhost:3000",
-    "https://001-pc-management.d2vdxg5wq5iczb.amplifyapp.com",
     "https://main.dtlqgaeqnt7wq.amplifyapp.com",
 ])
 def test_allowed_origin_receives_cors_headers(origin):
@@ -26,6 +25,7 @@ def test_allowed_origin_receives_cors_headers(origin):
 
 
 @pytest.mark.parametrize("origin", [
+    "https://001-pc-management.d2vdxg5wq5iczb.amplifyapp.com",
     "https://untrusted.example.com",
     "https://main.dtlqgaeqnt7wq.amplifyapp.com.evil.example.com",
     "http://main.dtlqgaeqnt7wq.amplifyapp.com",
