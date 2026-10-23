@@ -21,10 +21,17 @@ class LambdaStack(Stack):
                  pc_usage_histories_table=None, system_activity_table=None, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
+        internal_proxy_key_id = self.node.try_get_context("internalProxyKeyId") or "current"
+        if internal_proxy_key_id not in {"current", "next"}:
+            raise ValueError("internalProxyKeyId must be 'current' or 'next'")
+
         # Azure AD シークレットの参照
         # 事前に AWS Secrets Manager に 'AzureAdSecrets' という名前で登録されている想定
         azure_ad_secrets = secretsmanager.Secret.from_secret_name_v2(
             self, "AzureAdSecrets", "AzureAdSecrets"
+        )
+        internal_proxy_secret = secretsmanager.Secret.from_secret_name_v2(
+            self, "InternalProxySecret", "InternalProxySigningSecret"
         )
 
         # Lambda関数を作成
@@ -37,17 +44,26 @@ class LambdaStack(Stack):
             entry=lambda_src_dir,  # lambda フォルダを指定。直下に requirements.txt がある
             index="src/main.py",   # エントリポイントのファイル
             handler="lambda_handler",
-            runtime=_lambda.Runtime.PYTHON_3_9,
+            runtime=_lambda.Runtime.PYTHON_3_12,
             timeout=Duration.seconds(30),
             environment={
                 "USERS_TABLE_NAME": users_table.table_name if users_table else "Users",
                 "PCS_TABLE_NAME": pcs_table.table_name if pcs_table else "PCs",
                 "AZURE_AD_SECRET_NAME": "AzureAdSecrets",
+                "SYSTEM_ACTIVITY_TABLE_NAME": system_activity_table.table_name if system_activity_table else "SystemActivity",
+                "ECS_CLUSTER_NAME": "PCManagementCluster",
+                "ECS_SERVICE_NAME": "PCManagementService",
+                "IDLE_TIMEOUT_SECONDS": "7200",
+                "START_LOCK_SECONDS": "180",
+                "RETRY_MAX_SECONDS": "180",
+                "INTERNAL_PROXY_SECRET_ARN": internal_proxy_secret.secret_arn,
+                "INTERNAL_PROXY_KEY_ID": internal_proxy_key_id,
             }
         )
 
         # シークレットへの読み取り権限を追加
         azure_ad_secrets.grant_read(api_lambda)
+        internal_proxy_secret.grant_read(api_lambda)
 
         # DynamoDBへのアクセス権限を追加
         if users_table:
@@ -125,8 +141,14 @@ class LambdaStack(Stack):
             entry=lambda_src_dir,
             index="src/services/ecs_manager.py",
             handler="lambda_handler_cloudwatch_timeout_check",
-            runtime=_lambda.Runtime.PYTHON_3_9,
+            runtime=_lambda.Runtime.PYTHON_3_12,
             timeout=Duration.seconds(30),
+            environment={
+                "SYSTEM_ACTIVITY_TABLE_NAME": system_activity_table.table_name if system_activity_table else "SystemActivity",
+                "ECS_CLUSTER_NAME": "PCManagementCluster",
+                "ECS_SERVICE_NAME": "PCManagementService",
+                "IDLE_TIMEOUT_SECONDS": "7200",
+            },
         )
 
         # IAM権限の付与
@@ -151,10 +173,10 @@ class LambdaStack(Stack):
             )
         )
 
-        # 1時間ごとの EventBridge ルール
+        # 最大15分以内にアイドル条件を反映する EventBridge ルール
         rule = events.Rule(
             self, "EcsTimeoutCheckRule",
-            schedule=events.Schedule.rate(Duration.hours(1))
+            schedule=events.Schedule.rate(Duration.minutes(15))
         )
         rule.add_target(targets.LambdaFunction(timeout_check_lambda))
 

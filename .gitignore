@@ -2,17 +2,27 @@
 .env
 node_modules/
 dist/
+build/
 .DS_Store
+Thumbs.db
 coverage/
 *.log
+*.tmp
+*.swp
 __pycache__/
 *.pyc
+.venv/
+venv/
+*.egg-info/
 .pytest_cache
+venv/
+.venv/
 *.aws
 .next/
 out/
 .terraform/
 .vscode/
+.idea/
 
 # CDK build outputs
 cdk.out/
@@ -27,3 +37,6 @@ logs.json
 
 # Specify CLI local settings
 .specify/init-options.json
+
+# Claude Code local-only settings (per-machine permission grants)
+.claude/settings.local.json

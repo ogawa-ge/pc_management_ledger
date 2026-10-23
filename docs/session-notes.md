@@ -10,6 +10,134 @@
 
 ## セッション履歴
 
+### 日付：2026-10-02
+
+#### 概要
+- 作業内容: 前回(2026-09-30)実装したT044（PC名/メーカー/モデル/ストレージ(GB)のAI抽出、WindowsProductNameのWindows 11誤表示修正）について、ブラウザ画面上での目視確認を実施。
+
+#### 作業内容詳細
+
+##### 1. T044の画面目視確認 ✅ COMPLETED
+- **結果**:
+  - WindowsProductNameの修正を確認。貼り付け→抽出で実機通り「Windows 11」が正しく表示されることを確認。
+  - PC名/メーカー/モデル/ストレージ(GB)の各欄への反映も確認済み。問題なし。
+- これにより、T044の実装内容（コード・画面の両方）の確認がすべて完了。**T044は完了。**
+- **補足（スコープの明確化）**: 本機能のIssue範囲は「①ターミナル実行結果の受領→②AI抽出・整形→③フォームへの反映」までであり、「PCを登録」ボタン押下後の実際の保存（DynamoDB書き込み）確認はこのIssueの対象外。以後、登録保存確認はこの機能の次回タスクとしない。
+
+##### 2. 「未使用PC一覧」画面のストレージ単位なし表示への対応は対象外と決定 ✅ COMPLETED（方針決定のみ）
+- **決定事項**: 「未使用PC一覧」画面（[unused/page.tsx:75](../frontend/src/app/pcs/unused/page.tsx#L75)）でストレージ値が単位なしで表示されている件は、本Issue（AI PC情報抽出機能）とは別範囲であるため、今回は対応しない。
+
+#### 次回の予定
+- 2026-09-16・2026-09-30・2026-10-02分を含む一連の変更（backend/ecs, frontend, docs, memory）をコミット。
+
+### 日付：2026-09-30
+
+#### 概要
+- 作業内容:
+  - 前回(2026-09-16)実装したメモリ・ストレージのGB・小数点1桁表示を、実際にブラウザの画面上で目視確認
+  - T044の残作業（貼り付け用PowerShellコマンドの拡張、および「PC名」「メーカー」「ストレージ総容量」「モデル」のAI抽出対応）に着手
+
+#### 作業内容詳細
+
+##### 1. メモリ・ストレージのGB・小数点1桁表示の画面確認 ✅ COMPLETED
+- **対応**: backend/ecs・frontendをローカル起動し、PC登録画面で貼り付け→AI抽出を実施。
+- **結果**: 「メモリ (GB)」ラベルに単位が表示され、抽出結果が`8.0`のように小数点1桁で反映されることを画面上で確認。想定通り。
+
+##### 2. T044: 貼り付け用PowerShellコマンドの拡張とAI抽出対応 ✅ COMPLETED
+- **事前検証**: PowerShellで各プロパティの実在・値を確認（`$env` PowerShellツールで実機検証）。
+  - `CsManufacturer`, `CsModel`, `CsName`（コンピューター名）はいずれも`Get-ComputerInfo`に実在することを確認。
+  - ストレージ総容量は`Get-ComputerInfo`に存在しないため、`Get-CimInstance Win32_DiskDrive | Measure-Object -Property Size -Sum`で合計バイト数を取得する方式を採用。
+- **対応**:
+  - [register/page.tsx](../frontend/src/app/pcs/register/page.tsx)の貼り付け用PowerShellコマンドに`Manufacturer`(=`CsManufacturer`)、`Model`(=`CsModel`)、`PCName`(=`CsName`)、`StorageTotalBytes`(ディスク合計バイト数)を追加。ストレージのGB変換はメモリ容量と同様、コード側で計算せずGeminiのプロンプト指示（AIの推論）に委ねる方針を踏襲し、生のバイト値のまま出力。
+  - [gemini_service.py](../backend/ecs/src/services/gemini_service.py)の抽出プロンプトに新規項目`pcName`（コンピューター名）を追加。`manufacturer`/`model`/`storage`は既存のプロンプトのまま（元データが揃ったことで抽出できるようになる）。
+  - `pcName`はPCデータモデルに存在しなかったため、GPU項目のときと同様に[pc.py](../backend/ecs/src/models/pc.py)（`Pc`/`PcCreateRequest`に`pc_name`追加）、[pc_service.py](../backend/ecs/src/services/pc_service.py)、[main.py](../backend/ecs/src/main.py)にモデル項目・保存処理を追加。
+  - フロントエンドは[pc-api.ts](../frontend/src/services/pc-api.ts)の型定義に`pcName`を追加、[register/page.tsx](../frontend/src/app/pcs/register/page.tsx)の自動反映（既存の`pcName`ステートへ）と登録時送信データに`pcName`を追加。
+- **検証**:
+  - 実機PowerShellで拡張後のコマンドを実行し、`Manufacturer`/`Model`/`PCName`/`StorageTotalBytes`すべてが正しく取得できることを確認。
+  - curlでGemini APIを呼び出し、`manufacturer`, `model`, `gpu`, `pcName`, `storage`(バイト値→GBの小数点1桁)がすべて正しく抽出されることを確認。
+  - Pythonで`PcCreateRequest`が`pcName`（camelCase）を`pc_name`に正しくマッピングすることを確認。
+  - フロントエンドは`npx tsc --noEmit`で型エラーがないことを確認。
+- **補足**: 画面上での目視確認（ブラウザでの貼り付け→抽出→フォーム反映）は未実施。次回確認する。
+
+##### 3. WindowsProductNameが実機はWindows 11なのに「Windows 10」と誤表示される問題の修正 ✅ COMPLETED
+- **課題**: 目視確認のため実機でコマンドを実行したところ、実際はWindows 11 Proの端末なのに`WindowsProductName`が`"Windows 10 Pro"`と返ってきた。
+- **原因**: アプリ側のバグではなくWindows OS自体の既知の不具合。`Get-ComputerInfo`の`WindowsProductName`はレジストリ`HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion`の`ProductName`文字列をそのまま返すが、この文字列はMicrosoftがWindows 11リリース時に更新しておらず、実機がWindows 11でも`"Windows 10 Pro"`のままになる。PowerShellで実機検証したところ、`OsBuildNumber=26200`（Windows 11相当）・`DisplayVersion=25H2`（Windows 10には存在しないバージョン名）であることからWindows 11であることが確定した一方、`ProductName`だけが古い文字列のままだった。
+- **対応（試行1・後に破棄）**: ビルド番号（22000以上）で判定し`"Windows 10"`→`"Windows 11"`に文字列置換する案を一度実装したが、場当たり的な補正だとの指摘を受け破棄。
+- **対応（採用）**: `Get-CimInstance Win32_OperatingSystem`の`Caption`プロパティを調査したところ、実機で`"Microsoft Windows 11 Pro"`と正しい値を返すことを発見。壊れた`WindowsProductName`を無理に補正するのではなく、**最初から正しい値を返すこちらを取得元に切り替える**方針に変更した。「Microsoft 」という接頭辞が付くが、誤りではないため許容する（ユーザー判断）。[register/page.tsx](../frontend/src/app/pcs/register/page.tsx)のコマンドの`WindowsProductName`を`$osCaption = (Get-CimInstance Win32_OperatingSystem | Select-Object -ExpandProperty Caption)`から取得するよう変更。
+- **検証**: 実機PowerShellで修正後のコマンドを実行し、`"WindowsProductName": "Microsoft Windows 11 Pro"`と正しく取得できることを確認。curlでGemini APIに送信し、`os`が`"Windows 11 Pro"`として正しく抽出されることも確認（Geminiが"Microsoft "接頭辞を自然に正規化）。`tsc --noEmit`で型エラーなし。
+
+#### 次回の予定
+- T044全体（PC名/メーカー/モデル/ストレージ総容量の抽出、WindowsProductName修正含む）について、ブラウザでの画面上での目視確認（未実施）。特にWindowsProductNameの修正は今回のセッションで実装したばかりのため、優先して確認する。
+- 本日分の変更（backend/ecs, frontend, docs, memory）はコミット未実施。セッション終了時点で作業ツリーに残っている状態。次回セッション開始時に`git status`で確認してからコミットするか判断する。
+- 前回(2026-09-16)からの繰り越し: 「未使用PC一覧」画面（[unused/page.tsx:75](../frontend/src/app/pcs/unused/page.tsx#L75)）でストレージ値が単位なしで表示されている点は未対応のまま（対応するかは未決定）。
+
+### 日付：2026-09-16
+
+#### 概要
+- 作業内容:
+  - T044の決定事項のうち、ストレージ容量のGB・小数点1桁表示を実装
+  - メモリ容量の表示不整合に気づき、ストレージと同様の方針に統一する方針を決定し、同日中にT045として実装
+  - いずれもcurl・型チェックでの検証は完了、画面上での目視確認・変更のコミットは未実施
+
+#### 作業内容詳細
+
+##### 1. ストレージ容量のGB・小数点1桁表示 ✅ COMPLETED (T044の一部)
+- **対応**:
+  - [gemini_service.py](../backend/ecs/src/services/gemini_service.py)のプロンプトの`storage`項目を「単位はGB、小数点第1位まで」に変更（例: `512.0`）。
+  - [register/page.tsx](../frontend/src/app/pcs/register/page.tsx)の「ストレージ」ラベルを「ストレージ (GB)」に変更し、単位を画面に明示。
+  - AI抽出結果は`Number(result.storage).toFixed(1)`で小数点1桁に整形してから反映するよう変更。
+- **検証**: curlで実際にGemini APIを呼び出し、512.11GB相当のバイト値→`512.1`、ちょうど512GB相当→`512.0`と、小数点1桁で正しく返ることを確認。フロントエンドは`npx tsc --noEmit`で型エラーがないことを確認。
+- **補足**: 「未使用PC一覧」画面（[unused/page.tsx:75](../frontend/src/app/pcs/unused/page.tsx#L75)）でもストレージ値を単位なしで表示している箇所があるが、今回はPC登録画面のみ対応（未対応の箇所として記録のみ）。
+
+##### 2. メモリ容量の表示不整合に気づき、方針決定（T045・未実装） ✅ COMPLETED（方針決定のみ）
+- **経緯**: ストレージのGB表示確認の際、実機テストで「8」という値が表示されたが、これはストレージではなくメモリ容量の値だったことが判明（ストレージは貼り付け用PowerShellコマンドが総容量を取得していないため、現状は常にnull）。この際、メモリ容量も単位表示がなく、小数点の有無も不定（Geminiの推論結果をそのまま表示）であることに気づいた。
+- **決定事項**: メモリ容量の表示もストレージと同じ方針（単位はGB・小数点第1位まで表示、バイト→GB変換はコード側で決定的に計算せずGeminiの推論に委ねる、厳密な精度は求めない）に統一する。
+- **対応**: 方針決定後、同日中に実装を実施(下記3.参照)。
+
+##### 3. メモリ容量のGB・小数点1桁表示の実装 ✅ COMPLETED (T045)
+- **対応**: ストレージで行った変更と同様に以下を実施。
+  - [gemini_service.py](../backend/ecs/src/services/gemini_service.py)のプロンプトの`memory`項目を「単位はGB、小数点第1位まで」に変更（例: `16.0`）。
+  - [register/page.tsx](../frontend/src/app/pcs/register/page.tsx)の「メモリ」ラベルを「メモリ (GB)」に変更。
+  - AI抽出結果を`Number(result.memory).toFixed(1)`で小数点1桁に整形してから反映するよう変更。
+- **検証**: バックエンドは`--reload`なしで起動していたため手動で再起動が必要だった（前回セッションでStatReloadの不安定さが判明済みのため、今回は最初から`--reload`なしで運用）。curlで実際にGemini APIを呼び出し、8399671296バイト→`8.0`、6321000000バイト（端数が出るケース）→`5.9`と、小数点1桁で正しく返ることを確認。フロントエンドは`npx tsc --noEmit`で型エラーがないことを確認。画面上での目視確認は未実施。
+
+#### 次回の予定
+- メモリ・ストレージのGB・小数点1桁表示（T044/T045）について、ブラウザでの画面上での目視確認（未実施）。
+- T044の残作業: 貼り付け用PowerShellコマンドの拡張（`CsManufacturer`, `CsModel`, ディスク総容量取得）と、「PC名」「メーカー」「ストレージ総容量」「モデル」のAI抽出・フォーム反映の実装。
+- 本日分の変更（backend/ecs, frontend, docs）はコミット未実施。セッション終了時点で作業ツリーに残っている状態。次回セッション開始時に`git status`で確認してからコミットするか判断する。
+
+### 日付：2026-09-04
+
+#### 概要
+- 作業内容:
+  - AI PC情報抽出機能(002-ai-pc-info-extraction)のローカル動作確認(画面・Gemini API実接続)を実施
+  - 貼り付け用PowerShellコマンドのプロパティ名不整合バグを修正
+  - GPU項目がAI抽出・PC登録の両方で欠落していたバグを修正
+  - 次回対応する仕様拡張の方針を決定(未着手・記録のみ)
+
+#### 作業内容詳細
+
+##### 1. 貼り付け用PowerShellコマンドのプロパティ名不一致の修正 ✅ COMPLETED
+- **課題**: PC登録画面に表示されるコマンド(`Get-ComputerInfo | Select-Object WindowsProductName, WindowsVersion, TotalPhysicalMemory, BiosSerialNumber, ProcessorName, GPUName | ConvertTo-Json`)を実機で実行すると、`WindowsProductName`と`WindowsVersion`以外がすべて`null`になった。
+- **原因**: `Get-ComputerInfo`の実際のプロパティ名が要求仕様([spec.md](../specs/002-ai-pc-info-extraction/spec.md) FR-001)の項目名と異なっていた(`TotalPhysicalMemory`→`CsTotalPhysicalMemory`、`ProcessorName`→`CsProcessors`配下の`Name`、`GPUName`はそもそも`Get-ComputerInfo`に存在せず`Win32_VideoController`が必要)。`Select-Object`は存在しないプロパティを指定してもエラーにならず黙って`null`を返すため、原因特定に手間取った。また`BiosSerialNumber`はPowerShellのバージョンにより実プロパティ名が`BiosSerialNumber`/`BiosSeralNumber`(スペルミス)で揺れることも判明。
+- **対応**: [frontend/src/app/pcs/register/page.tsx](../frontend/src/app/pcs/register/page.tsx)のコマンドを、`Get-ComputerInfo`と`Get-CimInstance Win32_VideoController`/`Win32_BIOS`を組み合わせて出力キー名は仕様通りに保つ形に修正。あわせて`powershell -Command "..."`という二重起動形式(内側の`$`変数が外側のPowerShellに変数展開されてしまう危険がある)をやめ、PowerShellへ直接貼り付ける形式に変更。
+
+##### 2. GPU項目がAI抽出・PC登録の両方から欠落していたバグの修正 ✅ COMPLETED
+- **課題**: PowerShellコマンドで`GPUName`は取得できているのに、PC登録画面の「GPU」欄に自動反映されなかった。
+- **原因**: `gpu`はAI抽出対象の6項目([gemini_service.py](../backend/ecs/src/services/gemini_service.py)のプロンプト)に含まれておらず、さらにPCデータモデル([pc.py](../backend/ecs/src/models/pc.py)の`Pc`/`PcCreateRequest`)にも存在しなかったため、手動入力した場合でも保存されない状態だった。
+- **対応**: `gemini_service.py`の抽出対象に`gpu`を追加。`pc.py`・[pc_service.py](../backend/ecs/src/services/pc_service.py)・[main.py](../backend/ecs/src/main.py)にモデル項目・保存処理を追加。フロントエンド側は[pc-api.ts](../frontend/src/services/pc-api.ts)の型定義と[register/page.tsx](../frontend/src/app/pcs/register/page.tsx)の自動反映・登録データ送信に`gpu`を追加。
+- **補足(デバッグ時の学び)**: 修正後もcurlでの検証で`gpu`が返らない事象が発生。Python関数を直接呼ぶと正しく`gpu`が返るのに、uvicorn `--reload`(StatReload)経由だと反映されていなかった。ログ上「Reloading...」の後に`Application startup complete`が出ておらず、Windows環境でのStatReloadが正しく再起動できていなかったことが原因。サーバーを手動で完全に再起動して解消。**Windows環境でuvicorn --reloadの反映が怪しい場合は、ログでreload完了(Application startup complete)を確認するか、疑わしければ手動再起動する。**
+
+##### 3. 動作確認の結果 ✅ COMPLETED
+- ログイン→PC登録画面→貼り付け→AI抽出→GPU欄含む全項目の自動反映を画面上で確認済み。
+- メモリ容量(バイト値→GB表示)はコード側の決定的な計算ではなく、Geminiへのプロンプト指示(「単位はGB」)によるAI自身の推論で変換されていることを実際にAPIレスポンスで確認(8399671296バイト→「8」)。
+
+#### 次回対応する仕様拡張の方針決定(未着手・記録のみ)
+- **ストレージ容量の単位**: GB表示、小数点1桁まで。変換はメモリ容量と同様にAIの推論に任せる方針とし、厳密な精度は求めない(コード側での決定的計算は行わない)。
+- **追加取得したい項目**: 「PC名」「メーカー(製造元)」「ストレージ総容量」「モデル」をAI抽出できるようにする。
+  - 現状の貼り付け用PowerShellコマンドの元データにこれらの情報が含まれていないため、まずはコマンドの拡張(例: `CsManufacturer`, `CsModel`, `Get-CimInstance Win32_DiskDrive`等でディスク総容量取得)から着手する方針。
+  - Gemini側の抽出プロンプト(`manufacturer`, `model`, `storage`)は既に存在するため、コマンド側の元データさえ揃えば抽出は機能する見込み。
+
 ### 日付：2026-07-29
 
 #### 概要

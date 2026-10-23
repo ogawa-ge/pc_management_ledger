@@ -4,29 +4,50 @@ from aws_cdk import (
     aws_ecs as ecs,
     aws_ec2 as ec2,
     aws_iam as iam,
-    aws_elasticloadbalancingv2 as elbv2,
     aws_secretsmanager as secretsmanager,
-    Duration,
 )
 from constructs import Construct
 
 class EcsStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, 
-                 pcs_table=None, pc_usage_histories_table=None, **kwargs) -> None:
+                 pcs_table=None, return_records_table=None, pc_usage_histories_table=None,
+                 system_activity_table=None, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
+
+        internal_proxy_key_id = self.node.try_get_context("internalProxyKeyId") or "current"
+        if internal_proxy_key_id not in {"current", "next"}:
+            raise ValueError("internalProxyKeyId must be 'current' or 'next'")
 
         # VPCの作成
         vpc = ec2.Vpc(
             self, "PCManagementVPC",
             cidr="10.0.0.0/16",
             max_azs=2,
-            nat_gateways=1,
+            nat_gateways=0,
+            subnet_configuration=[
+                ec2.SubnetConfiguration(
+                    name="Public",
+                    subnet_type=ec2.SubnetType.PUBLIC,
+                    cidr_mask=18,
+                ),
+                ec2.SubnetConfiguration(
+                    # Keep the existing construct name so CloudFormation retains
+                    # the deployed subnet and route-table logical IDs while the
+                    # NAT routes are removed.
+                    name="Private",
+                    subnet_type=ec2.SubnetType.PRIVATE_ISOLATED,
+                    cidr_mask=18,
+                ),
+            ],
         )
 
         # Gemini API キーのシークレット参照
         # 事前に AWS Secrets Manager に 'GeminiApiKey' という名前で登録されている想定
         gemini_secret = secretsmanager.Secret.from_secret_name_v2(
             self, "GeminiApiKeySecret", "GeminiApiKey"
+        )
+        internal_proxy_secret = secretsmanager.Secret.from_secret_name_v2(
+            self, "InternalProxySecret", "InternalProxySigningSecret"
         )
 
         # ECSクラスターの作成
@@ -54,7 +75,15 @@ class EcsStack(Stack):
             logging=ecs.LogDrivers.aws_logs(stream_prefix="PCManagement"),
             environment={
                 "PCS_TABLE_NAME": pcs_table.table_name if pcs_table else "PCs",
+                "RETURN_RECORDS_TABLE_NAME": return_records_table.table_name if return_records_table else "ReturnRecords",
                 "USAGE_HISTORY_TABLE_NAME": pc_usage_histories_table.table_name if pc_usage_histories_table else "PCUsageHistories",
+                "SYSTEM_ACTIVITY_TABLE_NAME": system_activity_table.table_name if system_activity_table else "SystemActivity",
+                "ECS_CLUSTER_NAME": "PCManagementCluster",
+                "ECS_SERVICE_NAME": "PCManagementService",
+                "IDLE_TIMEOUT_SECONDS": "7200",
+                "RETRY_MAX_SECONDS": "180",
+                "INTERNAL_PROXY_SECRET_ARN": internal_proxy_secret.secret_arn,
+                "INTERNAL_PROXY_KEY_ID": internal_proxy_key_id,
             },
             secrets={
                 "GEMINI_API_KEY": ecs.Secret.from_secrets_manager(gemini_secret, "GeminiApiKey")
@@ -70,7 +99,7 @@ class EcsStack(Stack):
             self, "PCManagementService",
             cluster=cluster,
             task_definition=task_definition,
-            desired_count=1,
+            desired_count=0,
             service_name="PCManagementService",
             assign_public_ip=True,
             vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC)
@@ -94,4 +123,9 @@ class EcsStack(Stack):
             pcs_table.grant_read_write_data(task_definition.task_role)
         if pc_usage_histories_table:
             pc_usage_histories_table.grant_read_write_data(task_definition.task_role)
+        if return_records_table:
+            return_records_table.grant_read_write_data(task_definition.task_role)
+        if system_activity_table:
+            system_activity_table.grant_read_write_data(task_definition.task_role)
+        internal_proxy_secret.grant_read(task_definition.task_role)
 

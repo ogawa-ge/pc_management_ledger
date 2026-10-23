@@ -1,10 +1,15 @@
 from fastapi import FastAPI, HTTPException, Depends, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 import uuid
 from src.services.gemini_service import parse_specs
-from src.services.pc_service import create_pc, record_usage_history, process_pc_return
+from src.services.pc_service import (
+    create_pc_transaction,
+    return_pc_transaction,
+    update_pc_status_transaction,
+)
 from src.models.user import UserRepository
 from src.models.return_record import ReturnRecordRepository
 from src.models.pc import PcRepository, Pc, PcCreateRequest, PcParseRequest, PcReturnRequest
@@ -12,17 +17,48 @@ from src.models.user import User
 from src.db import dynamodb
 from dotenv import load_dotenv
 import os
+from pydantic import BaseModel
+from src.services.internal_request_verifier import InternalRequestVerifier
+from src.services.idempotency_service import (
+    IdempotencyDecision,
+    IdempotencyService,
+    request_fingerprint,
+)
 
 # .env.local を読み込む
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "../../../.env.local"))
 
 app = FastAPI()
 
+
+@app.middleware("http")
+async def verify_internal_proxy_request(request: Request, call_next):
+    if request.url.path == "/":
+        return await call_next(request)
+    verifier = InternalRequestVerifier()
+    if not verifier.enabled:
+        return await call_next(request)
+    body = await request.body()
+    result = verifier.verify(
+        method=request.method,
+        path_with_query=request.url.path
+        + (f"?{request.url.query}" if request.url.query else ""),
+        body=body,
+        headers=dict(request.headers),
+    )
+    if not result.valid:
+        return JSONResponse(
+            status_code=403,
+            content={"status": "forbidden", "reason": result.reason},
+        )
+    request._body = body
+    return await call_next(request)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
-        "https://001-pc-management.d2vdxg5wq5iczb.amplifyapp.com",
+        "https://main.dtlqgaeqnt7wq.amplifyapp.com",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -31,6 +67,103 @@ app.add_middleware(
 
 
 # ========== RBAC Helper Functions ==========
+class RequestPrincipal(BaseModel):
+    user_id: str
+    role: str
+
+
+def get_user_repository() -> UserRepository:
+    return UserRepository()
+
+
+def get_idempotency_service() -> IdempotencyService:
+    return IdempotencyService()
+
+
+async def claim_idempotent_request(
+    request: Request,
+    operation: str,
+    service: IdempotencyService,
+) -> IdempotencyDecision:
+    key = request.headers.get("Idempotency-Key")
+    if not key:
+        raise HTTPException(status_code=400, detail="Idempotency-Key header is required")
+    try:
+        uuid.UUID(key)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail="Idempotency-Key must be a UUID") from error
+
+    body = await request.body()
+    path = request.url.path + (f"?{request.url.query}" if request.url.query else "")
+    owner_request_id = request.headers.get("X-Internal-Request-Id") or str(uuid.uuid4())
+    return service.claim(
+        key=key,
+        fingerprint=request_fingerprint(request.method, path, body),
+        operation=operation,
+        owner_request_id=owner_request_id,
+    )
+
+
+def idempotency_short_circuit(decision: IdempotencyDecision) -> Optional[JSONResponse]:
+    if decision.action == "PROCESSING":
+        return JSONResponse(
+            status_code=409,
+            headers={"Retry-After": "3", "Cache-Control": "no-store"},
+            content={
+                "status": "processing",
+                "message": "同じ操作を処理中です。",
+                "retryAfterSeconds": 3,
+            },
+        )
+    if decision.action == "CONFLICT":
+        return JSONResponse(
+            status_code=409,
+            headers={"Cache-Control": "no-store"},
+            content={
+                "status": "idempotency_conflict",
+                "message": "同じIdempotency-Keyを異なる要求には使用できません。",
+            },
+        )
+    if decision.action == "REPLAY":
+        return JSONResponse(
+            status_code=decision.response_status or 200,
+            headers={"Idempotency-Replayed": "true", "Cache-Control": "no-store"},
+            content=decision.response_body or {},
+        )
+    return None
+
+
+def get_request_principal(
+    request: Request,
+    user_repository: UserRepository = Depends(get_user_repository),
+) -> RequestPrincipal:
+    authorization = request.headers.get("Authorization")
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Authorization header required")
+
+    scheme, separator, user_id = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not separator or not user_id.strip() or " " in user_id.strip():
+        raise HTTPException(status_code=401, detail="Invalid authorization header")
+
+    try:
+        user = user_repository.get_user_by_id(user_id.strip())
+    except Exception as error:
+        raise HTTPException(status_code=503, detail="Failed to resolve authenticated user") from error
+
+    if user is None:
+        raise HTTPException(status_code=401, detail="Authenticated user not found")
+
+    return RequestPrincipal(user_id=user.user_id, role=user.role)
+
+
+def get_admin_principal(
+    principal: RequestPrincipal = Depends(get_request_principal),
+) -> RequestPrincipal:
+    if principal.role != "Admin":
+        raise HTTPException(status_code=403, detail="Admin permission required")
+    return principal
+
+
 async def get_user_role(user_id: str) -> Optional[str]:
     """
     DynamoDB から user_id のロールを取得
@@ -97,30 +230,79 @@ def parse_specs_endpoint(request: PcParseRequest) -> Dict[str, Any]:
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to parse specs: {str(e)}")
 
-@app.post("/api/pcs", response_model=Pc)
-def create_pc_endpoint(request: PcCreateRequest) -> Pc:
+@app.post("/api/pcs")
+async def create_pc_endpoint(
+    payload: PcCreateRequest,
+    request: Request,
+    principal: RequestPrincipal = Depends(get_request_principal),
+    user_repository: UserRepository = Depends(get_user_repository),
+    idempotency: IdempotencyService = Depends(get_idempotency_service),
+) -> Any:
     """
-    新しい PC を登録する
+    新しい PC を登録する（スペック項目はクライアントで確定済みの構造化フィールドとして受け取る）
     """
     try:
-        result_dict = create_pc(request.owner_id, request.specs_text, request.pc_type)
-        return Pc(**result_dict)
+        if principal.role != "Admin" and payload.owner_id != principal.user_id:
+            raise HTTPException(status_code=403, detail="Cannot register a PC for another user")
+
+        try:
+            owner = user_repository.get_user_by_id(payload.owner_id)
+        except Exception as error:
+            raise HTTPException(status_code=503, detail="Failed to verify owner") from error
+
+        if owner is None:
+            raise HTTPException(status_code=404, detail="Owner not found")
+
+        decision = await claim_idempotent_request(request, "create_pc", idempotency)
+        short_circuit = idempotency_short_circuit(decision)
+        if short_circuit:
+            return short_circuit
+        if not decision.owner_request_id or not decision.started_at:
+            raise HTTPException(status_code=500, detail="Idempotency ownership was not established")
+
+        structured_specs = {
+            field: getattr(payload, field)
+            for field in ("pc_name", "cpu", "memory", "storage", "os", "manufacturer", "model", "gpu")
+            if getattr(payload, field) is not None
+        }
+        if structured_specs:
+            return create_pc_transaction(
+                payload.owner_id,
+                payload.specs_text,
+                payload.pc_type,
+                request.headers["Idempotency-Key"],
+                decision.owner_request_id,
+                decision.started_at,
+                **structured_specs,
+            )
+
+        return create_pc_transaction(
+            payload.owner_id,
+            payload.specs_text,
+            payload.pc_type,
+            request.headers["Idempotency-Key"],
+            decision.owner_request_id,
+            decision.started_at,
+        )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create PC: {str(e)}")
 
 @app.get("/api/users", response_model=List[User])
-def get_users() -> List[User]:
+def get_users(
+    _principal: RequestPrincipal = Depends(get_admin_principal),
+    user_repository: UserRepository = Depends(get_user_repository),
+) -> List[User]:
     """
     全てのユーザーを取得する
     """
     try:
-        # Users テーブルから全ユーザーを取得
-        table = dynamodb.Table('Users')
-        response = table.scan()
-        users_data = response.get('Items', [])
-        return [User(**item) for item in users_data]
+        return user_repository.get_all_users()
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get users: {str(e)}")
+        raise HTTPException(status_code=503, detail="Failed to get users") from e
 
 @app.get("/api/pcs", response_model=List[Pc])
 def get_pcs(status: str = None) -> List[Pc]:
@@ -157,19 +339,36 @@ def get_pcs(status: str = None) -> List[Pc]:
         raise HTTPException(status_code=500, detail=f"Failed to get PCs: {str(e)}")
 
 @app.post("/api/pcs/{pc_id}/return")
-async def return_pc_endpoint(pc_id: str, request: PcReturnRequest) -> Dict[str, Any]:
+async def return_pc_endpoint(
+    pc_id: str,
+    payload: PcReturnRequest,
+    request: Request,
+    principal: RequestPrincipal = Depends(get_request_principal),
+    idempotency: IdempotencyService = Depends(get_idempotency_service),
+) -> Any:
     """
     PC を返却処理し、ステータスを更新し、返却記録を作成する
     """
     try:
-        # pc-service.py で定義した返却処理関数を呼び出す
-        result = await process_pc_return(
+        if principal.role != "Admin" and payload.user_id != principal.user_id:
+            raise HTTPException(status_code=403, detail="Cannot return a PC for another user")
+        decision = await claim_idempotent_request(request, "return_pc", idempotency)
+        short_circuit = idempotency_short_circuit(decision)
+        if short_circuit:
+            return short_circuit
+        if not decision.owner_request_id or not decision.started_at:
+            raise HTTPException(status_code=500, detail="Idempotency ownership was not established")
+        return return_pc_transaction(
             pc_id=pc_id,
-            user_id=request.user_id,
-            return_reason=request.return_reason,
-            pc_status_at_return=request.pc_status_at_return
+            user_id=payload.user_id,
+            return_reason=payload.return_reason,
+            condition=payload.pc_status_at_return,
+            idempotency_key=request.headers["Idempotency-Key"],
+            owner_request_id=decision.owner_request_id,
+            started_at=decision.started_at,
         )
-        return result
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"PC 返却処理中に予期せぬエラーが発生しました：{str(e)}")
 
@@ -178,8 +377,9 @@ async def return_pc_endpoint(pc_id: str, request: PcReturnRequest) -> Dict[str, 
 async def update_pc_status(
     pc_id: str,
     request: Request,
-    authorization: str = None
-) -> Dict[str, Any]:
+    principal: RequestPrincipal = Depends(get_admin_principal),
+    idempotency: IdempotencyService = Depends(get_idempotency_service),
+) -> Any:
     """
     PC のステータスを更新する（Admin のみ）
     
@@ -190,10 +390,6 @@ async def update_pc_status(
     }
     """
     try:
-        # Admin 権限確認
-        if not authorization:
-            raise HTTPException(status_code=401, detail="Authorization header required")
-        
         # リクエストボディを取得
         body = await request.json()
         new_status = body.get('newStatus')
@@ -207,69 +403,31 @@ async def update_pc_status(
                 detail=f"Invalid status. Must be one of {valid_statuses}"
             )
         
-        # 現在の PC 情報を取得
-        pc_repo = PcRepository()
-        pc = pc_repo.get_pc_by_id(pc_id)
-        
-        if not pc:
+        decision = await claim_idempotent_request(request, "update_pc_status", idempotency)
+        short_circuit = idempotency_short_circuit(decision)
+        if short_circuit:
+            return short_circuit
+        if not decision.owner_request_id or not decision.started_at:
+            raise HTTPException(status_code=500, detail="Idempotency ownership was not established")
+
+        pc_response = dynamodb.Table(os.getenv("PCS_TABLE_NAME", "PCs")).get_item(
+            Key={"pcId": pc_id}
+        )
+        pc_item = pc_response.get("Item")
+        if not pc_item:
             raise HTTPException(status_code=404, detail=f"PC not found: {pc_id}")
-        
-        old_status = pc.status
-        
-        # ステータスが同じ場合はスキップ
-        if old_status == new_status:
-            return {
-                "status": "success",
-                "message": "No status change needed",
-                "previousStatus": old_status,
-                "newStatus": new_status,
-                "updatedAt": datetime.utcnow().isoformat()
-            }
-        
-        # DynamoDB でステータスを更新
-        try:
-            table = dynamodb.Table('PCs')
-            table.update_item(
-                Key={'pc_id': pc_id},
-                UpdateExpression="SET #status = :new_status, #updated = :updated_at",
-                ExpressionAttributeNames={
-                    '#status': 'status',
-                    '#updated': 'updated_at'
-                },
-                ExpressionAttributeValues={
-                    ':new_status': new_status,
-                    ':updated_at': datetime.utcnow().isoformat()
-                }
-            )
-        except Exception as e:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Failed to update PC status: {str(e)}"
-            )
-        
-        # 利用履歴に記録
-        try:
-            # authorization ヘッダーから user_id を抽出（簡易実装）
-            user_id = authorization.split(" ")[1] if " " in authorization else "unknown"
-            
-            await record_usage_history(
-                pc_id=pc_id,
-                action='status_updated',
-                user_id=user_id,
-                old_status=old_status,
-                new_status=new_status,
-                reason=reason
-            )
-        except Exception as e:
-            # 履歴記録に失敗してもエラーとしない（ステータス更新は成功）
-            print(f"Warning: Failed to record usage history: {e}")
-        
-        return {
-            "status": "success",
-            "previousStatus": old_status,
-            "newStatus": new_status,
-            "updatedAt": datetime.utcnow().isoformat()
-        }
+        old_status = pc_item.get("status")
+
+        return update_pc_status_transaction(
+            pc_id=pc_id,
+            user_id=principal.user_id,
+            old_status=old_status,
+            new_status=new_status,
+            reason=reason,
+            idempotency_key=request.headers["Idempotency-Key"],
+            owner_request_id=decision.owner_request_id,
+            started_at=decision.started_at,
+        )
     
     except HTTPException:
         raise

@@ -1,46 +1,169 @@
 // PC関連のAPI呼び出しを処理するサービス
 import { PC } from '@/types/pc';
+import { User } from '@/types/user';
 
-// PCスペック解析
-export const parseSpecs = async (specsText: string) => {
+// Gemini APIによる抽出結果（parse-specsのレスポンス）
+export interface PcSpecs {
+  cpu?: string | null;
+  memory?: string | number | null;
+  storage?: string | number | null;
+  os?: string | null;
+  manufacturer?: string | null;
+  model?: string | null;
+  gpu?: string | null;
+  pcName?: string | null;
+}
+
+// parse-specsが失敗した場合のレスポンス（FR-007: 3回リトライ後もエラーの場合 retriesExhausted が true になる）
+export interface PcSpecsError {
+  error: string;
+  retriesExhausted?: boolean;
+}
+
+export interface RetryState {
+  status: 'idle' | 'starting' | 'processing' | 'timeout';
+  waitedSeconds: number;
+  remainingSeconds: number;
+}
+
+export interface RetryOptions {
+  idempotencyKey?: string;
+  signal?: AbortSignal;
+  onRetryStateChange?: (state: RetryState) => void;
+}
+
+export interface PcReturnResponse {
+  status?: string;
+  message: string;
+  recordId?: string;
+}
+
+const MAX_RETRY_SECONDS = 180;
+
+const createIdempotencyKey = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
+
+const sleep = (milliseconds: number, signal?: AbortSignal): Promise<void> =>
+  new Promise((resolve, reject) => {
+    const timer = window.setTimeout(resolve, milliseconds);
+    signal?.addEventListener('abort', () => {
+      window.clearTimeout(timer);
+      reject(new DOMException('Request was cancelled', 'AbortError'));
+    }, { once: true });
+  });
+
+const parseRetryAfter = (response: Response, fallback: number): number => {
+  const parsed = Number(response.headers.get('Retry-After'));
+  return Number.isFinite(parsed) && parsed > 0 && parsed <= 30 ? parsed : fallback;
+};
+
+const requestWithRetry = async <T>(
+  url: string,
+  init: RequestInit,
+  options: RetryOptions = {},
+): Promise<T> => {
+  const startedAt = Date.now();
+  const method = (init.method || 'GET').toUpperCase();
+  const idempotencyKey = options.idempotencyKey || createIdempotencyKey();
+  const headers = new Headers(init.headers);
+  headers.set('Idempotency-Key', idempotencyKey);
+  const fixedInit: RequestInit = { ...init, method, headers, signal: options.signal };
+
+  while (true) {
+    const response = await fetch(url, fixedInit);
+    let responseBody: unknown;
+    try {
+      responseBody = await response.clone().json();
+    } catch {
+      responseBody = undefined;
+    }
+    const bodyStatus = typeof responseBody === 'object' && responseBody !== null && 'status' in responseBody
+      ? String((responseBody as { status: unknown }).status)
+      : '';
+    const isStarting = response.status === 503 && bodyStatus === 'starting';
+    const isProcessing = response.status === 409 && bodyStatus === 'processing';
+    if (!isStarting && !isProcessing) {
+      options.onRetryStateChange?.({ status: 'idle', waitedSeconds: 0, remainingSeconds: MAX_RETRY_SECONDS });
+      if (!response.ok) await throwApiError(response);
+      return responseBody as T;
+    }
+
+    const waitedSeconds = Math.floor((Date.now() - startedAt) / 1000);
+    if (waitedSeconds >= MAX_RETRY_SECONDS) {
+      options.onRetryStateChange?.({ status: 'timeout', waitedSeconds, remainingSeconds: 0 });
+      throw new ApiError('バックエンドの起動が3分以内に完了しませんでした。操作は完了していません。', 503, 'start_timeout');
+    }
+    options.onRetryStateChange?.({
+      status: isStarting ? 'starting' : 'processing',
+      waitedSeconds,
+      remainingSeconds: Math.max(0, MAX_RETRY_SECONDS - waitedSeconds),
+    });
+    await sleep(parseRetryAfter(response, isStarting ? 15 : 3) * 1000, options.signal);
+  }
+};
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly detail?: string,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+const throwApiError = async (response: Response): Promise<never> => {
+  let detail: string | undefined;
   try {
-    const response = await fetch('/api/pcs/parse-specs', {
+    const body = await response.json();
+    detail = typeof body.detail === 'string' ? body.detail : undefined;
+  } catch {
+    detail = undefined;
+  }
+  throw new ApiError(detail || `HTTP error! status: ${response.status}`, response.status, detail);
+};
+
+// PCスペック解析（貼り付けられたターミナル出力からAIで抽出、DBへの書き込みは行わない）
+export const parseSpecs = async (specsText: string, options: RetryOptions = {}): Promise<PcSpecs | PcSpecsError> => {
+  try {
+    return await requestWithRetry<PcSpecs | PcSpecsError>('/api/pcs/parse-specs', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ specsText }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const result = await response.json();
-    return result;
+    }, options);
   } catch (error) {
     console.error('スペック解析エラー:', error);
     throw error;
   }
 };
 
-// PC登録
-export const registerPC = async (ownerId: string, specsText: string, pcType: string = "N") => {
+// PC登録（specsはクライアント側で確定済み（抽出結果 or 手動編集後）の構造化フィールド）
+export const registerPC = async (
+  ownerId: string,
+  specs: PcSpecs | string,
+  pcType: string = "N",
+  userId?: string,
+  options: RetryOptions = {},
+) => {
   try {
-    const response = await fetch('/api/pcs', {
+    const payload = typeof specs === 'string'
+      ? { ownerId, specsText: specs, pcType }
+      : { ownerId, pcType, ...specs };
+    return await requestWithRetry('/api/pcs', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...(userId ? { Authorization: `Bearer ${userId}` } : {}),
       },
-      body: JSON.stringify({ ownerId, specsText, pcType }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const result = await response.json();
-    return result;
+      body: JSON.stringify(payload),
+    }, options);
   } catch (error) {
     console.error('PC登録エラー:', error);
     throw error;
@@ -48,21 +171,15 @@ export const registerPC = async (ownerId: string, specsText: string, pcType: str
 };
 
 // PC一覧取得
-export const getPCs = async () => {
+export const getPCs = async (status?: string, options: RetryOptions = {}) => {
   try {
-    const response = await fetch('/api/pcs', {
+    const query = status ? `?status=${encodeURIComponent(status)}` : '';
+    return await requestWithRetry<PC[]>(`/api/pcs${query}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
       },
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const result = await response.json();
-    return result;
+    }, options);
   } catch (error) {
     console.error('PC一覧取得エラー:', error);
     throw error;
@@ -70,20 +187,21 @@ export const getPCs = async () => {
 };
 
 // ユーザー一覧取得
-export const getUsers = async () => {
+export const getUsers = async (userId: string): Promise<User[]> => {
   try {
     const response = await fetch('/api/users', {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
+        Authorization: `Bearer ${userId}`,
       },
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      await throwApiError(response);
     }
 
-    const result = await response.json();
+    const result: User[] = await response.json();
     return result;
   } catch (error) {
     console.error('ユーザー一覧取得エラー:', error);
@@ -92,22 +210,19 @@ export const getUsers = async () => {
 };
 
 // PC返却
-export const returnPC = async (pcId: string, returnData: { returnDate: string; returnReason: string; condition: string }) => {
+export const returnPC = async (
+  pcId: string,
+  returnData: { userId: string; returnReason: string; pcStatusAtReturn: string },
+  options: RetryOptions = {},
+) => {
   try {
-    const response = await fetch(`/api/pcs/${pcId}/return`, {
+    return await requestWithRetry<PcReturnResponse>(`/api/pcs/${pcId}/return`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(returnData),
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const result = await response.json();
-    return result;
+    }, options);
   } catch (error) {
     console.error('PC返却エラー:', error);
     throw error;

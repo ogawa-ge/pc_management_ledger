@@ -19,20 +19,20 @@ def test_gemini_api_key_exists():
 
 
 def test_gemini_service_import():
-    """gemini-service.py のインポートを確認"""
+    """gemini_service.py のインポートを確認"""
     import importlib.util
     
-    service_path = Path(__file__).parent.parent / "src" / "services" / "gemini-service.py"
+    service_path = Path(__file__).parent.parent / "src" / "services" / "gemini_service.py"
     spec = importlib.util.spec_from_file_location("gemini_service", service_path)
     gemini_service = importlib.util.module_from_spec(spec)
     
     try:
         spec.loader.exec_module(gemini_service)
-        print("✓ gemini-service.py のインポートに成功しました")
+        print("✓ gemini_service.py のインポートに成功しました")
         assert hasattr(gemini_service, 'parse_specs'), "parse_specs 関数が見つかりません"
         print("✓ parse_specs 関数が確認できました")
     except Exception as e:
-        print(f"✗ gemini-service.py のインポートに失敗: {e}")
+        print(f"✗ gemini_service.py のインポートに失敗: {e}")
         raise
 
 
@@ -40,7 +40,7 @@ def test_parse_specs_basic():
     """parse_specs 関数の基本動作を確認"""
     import importlib.util
     
-    service_path = Path(__file__).parent.parent / "src" / "services" / "gemini-service.py"
+    service_path = Path(__file__).parent.parent / "src" / "services" / "gemini_service.py"
     spec = importlib.util.spec_from_file_location("gemini_service", service_path)
     gemini_service = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(gemini_service)

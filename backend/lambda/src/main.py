@@ -1,4 +1,5 @@
 import json
+import uuid
 import urllib3
 from urllib.parse import urlencode
 from fastapi import FastAPI, Depends, Request, Response
@@ -8,6 +9,7 @@ from fastapi.security import HTTPBearer
 from jose import JWTError, jwt
 from typing import Optional
 from src.services.ecs_manager import get_ecs_manager
+from src.services.internal_request_signer import InternalRequestSigner, strip_internal_headers
 
 app = FastAPI()
 
@@ -16,7 +18,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
-        "https://001-pc-management.d2vdxg5wq5iczb.amplifyapp.com",
+        "https://main.dtlqgaeqnt7wq.amplifyapp.com",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -74,50 +76,72 @@ async def proxy_to_ecs(path: str, request: Request):
     資産管理 API (/api/pcs/* 等) へのリクエストを ECS (Fargate) にプロキシ転送します。
     ECS がスリープ中の場合は、自動起動をトリガーして 503 (Retry-After) を返します。
     """
-    # 1. ECSManager で ECS の起動確認と IP 取得
+    # 1. 受付を記録し、ECSManager で ECS の起動確認と IP 取得
     ecs_manager = get_ecs_manager()
+    proxy_request_id = str(uuid.uuid4())
+    ecs_manager.record_request_accepted(proxy_request_id)
+    ecs_manager.ensure_ecs_running(request_id=proxy_request_id)
     public_ip = ecs_manager.get_ecs_public_ip()
     
     if not public_ip:
         # ECS が起動していない場合は起動プロセスをバックグラウンドで開始
-        ecs_manager.ensure_ecs_running()
-        
         # HTTP 503 を返して、フロントエンドに再試行を促す
         return JSONResponse(
             status_code=503,
             content={
                 "status": "starting",
-                "message": "ECS server is starting up. Please try again in 10-15 seconds."
+                "message": "バックエンドを起動しています。操作は自動的に再試行されます。",
+                "requestId": str(uuid.uuid4()),
+                "retryAfterSeconds": 15,
+                "maxWaitSeconds": 180,
             },
-            headers={"Retry-After": "15"}
+            headers={"Retry-After": "15", "Cache-Control": "no-store"}
         )
     
     # 2. リクエストの内容を ECS へフォワード
     method = request.method
     
     # クエリパラメータの再構築
-    query_params = dict(request.query_params)
+    query_params = list(request.query_params.multi_items())
     query_string = f"?{urlencode(query_params)}" if query_params else ""
     
     # 転送先 URL
     target_url = f"http://{public_ip}:80/{path}{query_string}"
     
     # ヘッダーの引き継ぎ (Hostヘッダーは上書き)
-    headers = {key: value for key, value in request.headers.items() if key.lower() != "host"}
+    headers = strip_internal_headers(
+        {key: value for key, value in request.headers.items() if key.lower() != "host"}
+    )
     
     # リクエストボディの取得
     body = await request.body()
+    idempotency_key = headers.get("idempotency-key") or str(uuid.uuid4())
+    headers["Idempotency-Key"] = idempotency_key
+    internal_request_id = proxy_request_id
+    signer = InternalRequestSigner()
+    headers.update(
+        signer.sign(
+            method=method,
+            path_with_query=f"/{path}{query_string}",
+            body=body,
+            idempotency_key=idempotency_key,
+            request_id=internal_request_id,
+        )
+    )
     
     # HTTP クライアント (urllib3) でリクエストを送信
     http = urllib3.PoolManager()
+    in_flight_started = False
     try:
+        ecs_manager.begin_in_flight()
+        in_flight_started = True
         ecs_response = http.request(
             method=method,
             url=target_url,
             headers=headers,
             body=body if body else None,
             redirect=False,
-            timeout=10.0
+            timeout=urllib3.Timeout(connect=3.0, read=25.0)
         )
         
         # レスポンスヘッダーからプロキシに不適切なものを除外
@@ -140,6 +164,10 @@ async def proxy_to_ecs(path: str, request: Request):
                 "message": f"Failed to forward request to ECS: {str(e)}"
             }
         )
+    finally:
+        if in_flight_started:
+            succeeded = "ecs_response" in locals() and 200 <= ecs_response.status < 300
+            ecs_manager.finish_in_flight(succeeded=succeeded)
 
 def lambda_handler(event, context):
     # FastAPIアプリケーションをLambda用にラップ
