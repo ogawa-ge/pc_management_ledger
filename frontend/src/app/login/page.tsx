@@ -1,8 +1,34 @@
 'use client';
 
+import { Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+
+const LOGIN_FAILED_MESSAGE = 'ログインに失敗しました。しばらくしてから再度お試しください';
+
+const getLoginErrorMessage = (error: string | null): string | null => {
+  if (!error) {
+    return null;
+  }
+  return LOGIN_FAILED_MESSAGE;
+};
+
+function LoginErrorMessage() {
+  const searchParams = useSearchParams();
+  const errorMessage = getLoginErrorMessage(searchParams.get('error'));
+
+  if (!errorMessage) {
+    return null;
+  }
+
+  return (
+    <p role="alert" className="mb-4 rounded bg-red-50 p-3 text-center text-sm text-red-700">
+      {errorMessage}
+    </p>
+  );
+}
 
 export default function LoginPage() {
   return (
@@ -11,15 +37,18 @@ export default function LoginPage() {
         <Card className="shadow-lg">
           <CardHeader className="text-center">
             <CardTitle className="text-2xl font-bold text-gray-800">PC管理台帳</CardTitle>
-            <CardDescription>Microsoftアカウントでログインしてください</CardDescription>
+            <CardDescription>会社のGoogleアカウントでログインしてください</CardDescription>
           </CardHeader>
           <CardContent className="pt-4">
+            <Suspense fallback={null}>
+              <LoginErrorMessage />
+            </Suspense>
             <div className="flex justify-center">
               <Button
-                onClick={() => signIn('azure-ad', { callbackUrl: '/pcs' })}
+                onClick={() => signIn('google', { callbackUrl: '/pcs' })}
                 className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded w-full"
               >
-                Microsoftアカウントでログイン
+                Googleアカウントでログイン
               </Button>
             </div>
           </CardContent>

@@ -45,6 +45,41 @@ export async function get_user_auth_info(userId: string): Promise<UserAuthInfo> 
   }
 }
 
+export interface SyncUserRequest {
+  userId: string;
+  email: string;
+  name?: string | null;
+}
+
+export interface SyncUserResult {
+  userId: string;
+  role: 'Admin' | 'User';
+  created: boolean;
+}
+
+/**
+ * ログイン時に Users へユーザーを登録（登録済みなら更新）する
+ * 失敗した場合はログインを拒否するため、例外をそのまま投げる
+ * @param request - Google のユーザー情報（sub、email、name）
+ * @returns 登録結果（ロール、新規作成かどうか）
+ */
+export async function syncUser({ userId, email, name }: SyncUserRequest): Promise<SyncUserResult> {
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+  const response = await fetch(`${baseUrl}/api/auth/sync-user`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ userId, email, name: name ?? null }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`ユーザー登録に失敗しました (status: ${response.status})`);
+  }
+
+  return response.json();
+}
+
 /**
  * ユーザーの権限を取得する
  * @param userId - ユーザーID

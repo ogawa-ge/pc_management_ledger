@@ -80,12 +80,13 @@
   |---|---|---|
   | `DomainNotAllowed` | `signIn` コールバックがドメイン判定で拒否（`/login?error=DomainNotAllowed` を返す） | 会社のGoogleアカウントでログインしてください |
   | `RegistrationFailed` | `sync-user` の呼び出しに失敗 | しばらくしてから再度お試しください |
-  | ユーザーが同意画面・アカウント選択でキャンセルした場合の値 | Google 側でキャンセル | 表示しない（通常のログイン画面） |
+  | （`error` なし） | アカウント選択画面などからブラウザで戻った | 表示しない（通常のログイン画面） |
+  | `Callback` | Google の同意画面でキャンセルした（Google が `error=access_denied` で戻す）、またはその他のコールバック失敗 | しばらくしてから再度お試しください |
   | 上記以外（`OAuthSignin`、`OAuthCallback`、`Callback` など） | Google 側の障害など | しばらくしてから再度お試しください |
 
   メッセージは固定文言とし、ドメイン名は含めない（FR-003）。許可ドメインをブラウザ側に渡すための `NEXT_PUBLIC_` 付き環境変数は作らない。
 - **Rationale**: 内部のエラー詳細を出さない（FR-008）。キャンセル時はエラー扱いしない（Edge Cases）。
-- **Note**: キャンセル時に NextAuth v4 が付ける `error` の値は、実装時に実機で確認して確定する（tasks で確認タスクを設ける）。
+- **Note**: 2026-10-23 に確認（T013）。アカウント選択画面からブラウザで戻ると `error` なしでログイン画面に戻ることを実機で確認した。同意画面でキャンセルした場合は、NextAuth v4 のソースコード（`core/lib/oauth/callback.js`、`core/routes/callback.js`）から `error=Callback` になることを確認した（社内向けアプリでは同意画面が出ず、実機では未確認）。`Callback` はキャンセル以外の失敗でも同じ値になり区別できないため、失敗として表示する。
 
 ## R-8. 切り替え前のセッションの無効化（Edge Cases）
 

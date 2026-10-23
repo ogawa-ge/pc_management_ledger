@@ -67,6 +67,24 @@ def get_user_permissions(req: UserPermissionRequest):
     
     return {"permissions": permissions, "role": role}
 
+class SyncUserRequest(BaseModel):
+    userId: str
+    email: str
+    name: Optional[str] = None
+
+# ログイン時のユーザー登録（ECS を起動しないよう、proxy_to_ecs より前に定義する）
+@app.post("/api/auth/sync-user")
+def sync_user_endpoint(req: SyncUserRequest):
+    from src.services.auth_service import sync_user
+
+    try:
+        return sync_user(req.userId, req.email, req.name)
+    except ValueError:
+        return JSONResponse(status_code=400, content={"detail": "userId and email are required"})
+    except Exception as e:
+        print(f"Error syncing user: {e}")
+        return JSONResponse(status_code=500, content={"detail": "Failed to sync user"})
+
 # 資産管理 API (ECSへのリバースプロキシ)
 @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"])
 async def proxy_to_ecs(path: str, request: Request):
