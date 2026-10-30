@@ -32,7 +32,7 @@ description: "Task list for ログイン方式のGoogle Workspaceへの変更 (I
 **Purpose**: 用語の同期とローカル環境の準備
 
 - [X] T001 `docs/ubiquitous-language.md` の「1. ユーザー・権限関連」の **User** 行の定義を「システムを利用する人物。Google Workspace アカウント（`@genuine-pt.jp`）でログインする。」に変更し、備考に「`userId` は Google の `sub`」を追記する（FR-011、Constitution L3 Ubiquitous Language。実装前に行う）
-- [ ] T002 [P] 開発者のローカル環境の `frontend/.env.local`（git 管理外）から `AZURE_AD_*` を削除し、`GOOGLE_CLIENT_ID`・`GOOGLE_CLIENT_SECRET`・`ALLOWED_EMAIL_DOMAIN=genuine-pt.jp` を追加する（environment-setup.md「3」。リポジトリにはコミットしない）
+- [X] T002 [P] 開発者のローカル環境の `frontend/.env.local`（git 管理外）から `AZURE_AD_*` を削除し、`GOOGLE_CLIENT_ID`・`GOOGLE_CLIENT_SECRET`・`ALLOWED_EMAIL_DOMAIN=genuine-pt.jp` を追加する（environment-setup.md「3」。リポジトリにはコミットしない）
 
 ---
 
@@ -100,10 +100,10 @@ description: "Task list for ログイン方式のGoogle Workspaceへの変更 (I
 
 **Purpose**: Microsoft の経路が残っていないことの確認と、切り替え作業
 
-- [ ] T018 `frontend/`・`backend/lambda/`・`infrastructure/` を `azure|AzureAD|azure-ad|AZURE_AD` で検索し、ログイン関連の参照が残っていないことを確認する（SC-003）。`backend/tests/test_e2e.py` の Microsoft アカウントでのログインのテスト（`test_login_with_valid_microsoft_account` など）は、Google アカウントでのログインの内容に書き換える（`microsoft_account` → `google_account` など。テスト名・docstring・コメントも含む）。ただし、同等の Google アカウントでのログインのテストが別に存在する場合は、書き換えずに Microsoft のテストを削除する。`backend/ecs/tests/test-gemini-accuracy.py` の参照は、ログインと無関係（PC のスペックなど）であることを確認したうえで変更しない（Constitution L4-2）
-- [ ] T019 `cd backend && pytest tests -k sync_user` を実行し、すべて成功することを確認する
-- [ ] T020 `cd frontend && npm run build` を実行し、型エラー・ビルドエラーがないことを確認する
-- [ ] T021 quickstart.md「4. 手動での確認シナリオ」の 1〜9 をローカルで実施し、結果を確認する
+- [X] T018 `frontend/`・`backend/lambda/`・`infrastructure/` を `azure|AzureAD|azure-ad|AZURE_AD` で検索し、ログイン関連の参照が残っていないことを確認する（SC-003）。`backend/tests/test_e2e.py` の Microsoft アカウントでのログインのテスト（`test_login_with_valid_microsoft_account` など）は、Google アカウントでのログインの内容に書き換える（`microsoft_account` → `google_account` など。テスト名・docstring・コメントも含む）。ただし、同等の Google アカウントでのログインのテストが別に存在する場合は、書き換えずに Microsoft のテストを削除する。`backend/ecs/tests/test-gemini-accuracy.py` の参照は、ログインと無関係（PC のスペックなど）であることを確認したうえで変更しない（Constitution L4-2）
+- [X] T019 `cd backend && pytest tests -k sync_user` を実行し、すべて成功することを確認する
+- [X] T020 `cd frontend && npm run build` を実行し、型エラー・ビルドエラーがないことを確認する
+- [X] T021 quickstart.md「4. 手動での確認シナリオ」の 1〜9 をローカルで実施し、結果を確認する（2026-10-23・10-30 確認。ローカルの Lambda は Users をメモリ上の仮テーブルに差し替えて実施（この PC の IAM ユーザーに DynamoDB 権限がないため）。シナリオ 1〜5・8・9 は期待どおり。シナリオ 6・7: Google 側が `hd` 指定により `@genuine-pt.jp` 以外のアカウントを入力させず、アプリ側の拒否処理には到達しない。アプリ側の拒否は判定関数の動作確認と pytest で確認済みとし、画面での確認は省略（ユーザー判断）。同意画面でのキャンセルは `/login?error=Callback` で「ログインに失敗しました…」が表示されることを実機で確認）
 - [ ] T022 quickstart.md「5. 本番（新 Amplify）への切り替え手順」に沿って切り替える（`NEXTAUTH_SECRET` の変更、CDK デプロイ、「6. 既存データの削除」、Amplify 再デプロイ、本番 URL でシナリオ 1〜9、「7. 最初の管理者の設定」）。Amplify の環境変数が実行時に読めない場合は、environment-setup.md「2」の amplify.yml の対応を行う
 - [ ] T023 CDK デプロイ後、Secrets Manager 上の `AzureAdSecrets` を手動で削除する（environment-setup.md「5」）
 
