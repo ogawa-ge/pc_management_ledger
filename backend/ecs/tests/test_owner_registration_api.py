@@ -3,14 +3,16 @@ from src.models.user import User
 
 
 PC_RESPONSE = {
-    "pc_id": "N-001",
-    "owner_id": "user-001",
+    "pcId": "N-001",
+    "ownerId": "user-001",
     "type": "N",
     "status": "Unused",
     "model": "Test Model",
-    "created_at": "2026-08-19T00:00:00",
-    "updated_at": "2026-08-19T00:00:00",
+    "createdAt": "2026-08-19T00:00:00",
+    "updatedAt": "2026-08-19T00:00:00",
 }
+
+HEADERS = {"Idempotency-Key": "11111111-1111-4111-8111-111111111111"}
 
 
 def test_admin_can_register_pc_for_existing_owner(api_client, user_repository_mock, pc_create_mock):
@@ -22,11 +24,15 @@ def test_admin_can_register_pc_for_existing_owner(api_client, user_repository_mo
     response = api_client.post(
         "/api/pcs",
         json={"ownerId": "user-001", "specsText": "specs", "pcType": "N"},
+        headers=HEADERS,
     )
 
     assert response.status_code == 200
     assert response.json()["ownerId"] == "user-001"
-    pc_create_mock.assert_called_once_with("user-001", "specs", "N")
+    pc_create_mock.assert_called_once_with(
+        "user-001", "specs", "N", HEADERS["Idempotency-Key"],
+        "request-owner", "2026-09-25T00:00:00+00:00"
+    )
 
 
 def test_general_user_can_register_pc_for_self(api_client, user_repository_mock, pc_create_mock):
@@ -41,6 +47,7 @@ def test_general_user_can_register_pc_for_self(api_client, user_repository_mock,
     response = api_client.post(
         "/api/pcs",
         json={"ownerId": "user-001", "specsText": "specs", "pcType": "N"},
+        headers=HEADERS,
     )
 
     assert response.status_code == 200
@@ -51,6 +58,7 @@ def test_missing_owner_does_not_save(api_client, pc_create_mock):
     response = api_client.post(
         "/api/pcs",
         json={"specsText": "specs", "pcType": "N"},
+        headers=HEADERS,
     )
 
     assert response.status_code == 422
@@ -63,6 +71,7 @@ def test_unknown_owner_does_not_save(api_client, user_repository_mock, pc_create
     response = api_client.post(
         "/api/pcs",
         json={"ownerId": "missing", "specsText": "specs", "pcType": "N"},
+        headers=HEADERS,
     )
 
     assert response.status_code == 404
@@ -80,6 +89,7 @@ def test_general_user_cannot_register_for_other_owner(api_client, user_repositor
     response = api_client.post(
         "/api/pcs",
         json={"ownerId": "user-002", "specsText": "specs", "pcType": "N"},
+        headers=HEADERS,
     )
 
     assert response.status_code == 403
@@ -90,6 +100,7 @@ def test_unauthenticated_registration_does_not_save(unauthenticated_client, pc_c
     response = unauthenticated_client.post(
         "/api/pcs",
         json={"ownerId": "user-001", "specsText": "specs", "pcType": "N"},
+        headers=HEADERS,
     )
 
     assert response.status_code == 401

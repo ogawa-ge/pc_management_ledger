@@ -3,6 +3,9 @@ from unittest.mock import Mock, call
 from src.models.user import UserRepository
 
 
+HEADERS = {"Idempotency-Key": "11111111-1111-4111-8111-111111111111"}
+
+
 def test_empty_users_is_successful_empty_array(api_client, user_repository_mock):
     user_repository_mock.get_all_users.return_value = []
 
@@ -55,6 +58,7 @@ def test_owner_recheck_failure_does_not_save(api_client, user_repository_mock, p
     response = api_client.post(
         "/api/pcs",
         json={"ownerId": "user-001", "specsText": "specs", "pcType": "N"},
+        headers=HEADERS,
     )
 
     assert response.status_code == 503

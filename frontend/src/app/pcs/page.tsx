@@ -1,12 +1,14 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { PC } from '@/types/pc';
 import Link from 'next/link';
 import { getStatusDisplay, getStatusColor } from '@/lib/utils';
 import { signOut, useSession } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
+import ECSLoadingState, { useECSLoadingState } from '@/components/ecs-loading-state';
+import { ApiError, getPCs } from '@/services/pc-api';
 
 // 型定義のインポートを想定
 // 実際には、PCのデータ構造に合わせて調整が必要です。
@@ -21,6 +23,7 @@ const PcsPage: React.FC<PcsPageProps> = ({ initialPcs = [] }) => {
   const [pcsList, setPcsList] = useState<PC[]>(initialPcs);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const ecsLoading = useECSLoadingState();
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -28,30 +31,56 @@ const PcsPage: React.FC<PcsPageProps> = ({ initialPcs = [] }) => {
     }
   }, [status, router]);
 
-  useEffect(() => {
-    if (status !== 'authenticated') return;
-
-    const fetchPcs = async () => {
-      setLoading(true);
-      try {
-        // API呼び出し (T029で実装した /api/pcs を想定)
-        const response = await fetch('/api/pcs');
-        if (!response.ok) {
-          throw new Error('Failed to fetch PC list');
+  const fetchPcs = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      // API呼び出し (T029で実装した /api/pcs を想定)
+      const data = await getPCs(undefined, {
+        onRetryStateChange: (retry) => {
+          ecsLoading.setStatus(retry.status === 'idle' ? 'starting' : retry.status);
+          ecsLoading.setRemainingSeconds(retry.remainingSeconds);
+          ecsLoading.setIsLoading(retry.status !== 'idle');
+        },
+      });
+      setPcsList(data);
+    } catch (err) {
+      ecsLoading.setIsLoading(false);
+      if (err instanceof ApiError) {
+        if (err.status === 401 || err.status === 403) {
+          setError('アクセス権限がありません。ログイン状態を確認してください。');
+        } else if (err.detail === 'start_timeout') {
+          setError(err.message);
+        } else if (err.status >= 500) {
+          setError('サーバーでエラーが発生しました。しばらく経ってから再試行してください。');
+        } else {
+          setError('PC一覧の取得に失敗しました。サーバーに一時的に接続できません。');
         }
-        const data: PC[] = await response.json();
-        setPcsList(data);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'PC一覧の取得に失敗しました。');
-      } finally {
-        setLoading(false);
+      } else {
+        setError('PC一覧の取得に失敗しました。サーバーに一時的に接続できません。');
       }
-    };
-    fetchPcs();
-  }, [status]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (status === 'authenticated') {
+      fetchPcs();
+    }
+  }, [status, fetchPcs]);
 
   if (status === 'loading' || loading) {
-    return <div className="p-8 text-center">読み込み中です...</div>;
+    return (
+      <>
+        <ECSLoadingState
+          isLoading={ecsLoading.isLoading}
+          status={ecsLoading.status}
+          remainingSeconds={ecsLoading.remainingSeconds}
+        />
+        <div className="p-8 text-center">読み込み中です...</div>
+      </>
+    );
   }
 
   if (status === 'unauthenticated') {
@@ -59,10 +88,27 @@ const PcsPage: React.FC<PcsPageProps> = ({ initialPcs = [] }) => {
   }
 
   if (error) {
-    return <div className="p-8 text-red-600">エラーが発生しました: {error}</div>;
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4 p-8 text-center">
+        <p className="text-red-600 font-medium">{error}</p>
+        <Button 
+          onClick={() => fetchPcs()} 
+          variant="outline" 
+          className="border-red-600 text-red-600 hover:bg-red-50"
+        >
+          再試行
+        </Button>
+      </div>
+    );
   }
 
   return (
+    <>
+    <ECSLoadingState
+      isLoading={ecsLoading.isLoading}
+      status={ecsLoading.status}
+      remainingSeconds={ecsLoading.remainingSeconds}
+    />
     <div className="container mx-auto p-6">
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-4">
@@ -156,6 +202,7 @@ const PcsPage: React.FC<PcsPageProps> = ({ initialPcs = [] }) => {
         </table>
       </div>
     </div>
+    </>
   );
 };
 

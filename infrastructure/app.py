@@ -28,7 +28,9 @@ lambda_stack = LambdaStack(
 ecs_stack = EcsStack(
     app, "EcsStack",
     pcs_table=database_stack.pcs_table,
-    pc_usage_histories_table=database_stack.pc_usage_histories_table
+    return_records_table=database_stack.return_records_table,
+    pc_usage_histories_table=database_stack.pc_usage_histories_table,
+    system_activity_table=database_stack.system_activity_table
 )
 
 app.synth()
