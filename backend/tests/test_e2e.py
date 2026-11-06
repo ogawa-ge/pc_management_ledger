@@ -17,19 +17,19 @@ from typing import Dict, Any
 
 
 class TestAuthenticationFlow:
-    """Microsoft アカウントを使用したログイン機能のテスト"""
+    """Google Workspace アカウントを使用したログイン機能のテスト"""
 
     @pytest.fixture
     def auth_client(self):
         """認証クライアントのモック"""
         return Mock()
 
-    def test_login_with_valid_microsoft_account(self, auth_client):
-        """有効な Microsoft アカウントでのログイン成功"""
+    def test_login_with_valid_google_account(self, auth_client):
+        """有効な Google Workspace アカウントでのログイン成功"""
         # 予期される動作:
-        # 1. ユーザーが Microsoft アカウントでログインを開始
-        # 2. Azure AD が認証トークンを返す
-        # 3. システムがユーザー権限をデータベースから取得
+        # 1. ユーザーが Google Workspace アカウントでログインを開始
+        # 2. Google が認証結果を返す
+        # 3. システムがユーザーを登録し、ユーザー権限をデータベースから取得
         # 4. ログインセッションが作成される
 
         auth_client.authenticate.return_value = {
@@ -38,7 +38,7 @@ class TestAuthenticationFlow:
             "email": "user@example.com",
         }
 
-        result = auth_client.authenticate("microsoft_account")
+        result = auth_client.authenticate("google_account")
 
         assert result["access_token"] is not None
         assert result["user_id"] == "user-001"

@@ -1,31 +1,57 @@
-import NextAuth from 'next-auth';
-import AzureADProvider from 'next-auth/providers/azure-ad';
-import { get_user_auth_info } from '@/lib/auth-service';
+import NextAuth, { AuthOptions } from 'next-auth';
+import GoogleProvider, { GoogleProfile } from 'next-auth/providers/google';
+import { get_user_auth_info, syncUser } from '@/lib/auth-service';
+import { getRejectionReason } from '@/lib/email-domain';
 
-export const authOptions = {
+export const authOptions: AuthOptions = {
   providers: [
-    AzureADProvider({
-      clientId: process.env.AZURE_AD_CLIENT_ID!,
-      clientSecret: process.env.AZURE_AD_CLIENT_SECRET!,
-      tenantId: process.env.AZURE_AD_TENANT_ID!,
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      // アカウント選択画面を許可ドメインに絞り込む（使い勝手のためで、ログイン可否の判定には使わない）
+      authorization: { params: { hd: process.env.ALLOWED_EMAIL_DOMAIN } },
     }),
   ],
+  pages: {
+    signIn: '/login',
+    error: '/login',
+  },
   callbacks: {
-    async jwt({ token, account, profile }: any) {
-      // Access tokenをJWTに追加
-      if (account) {
-        token.accessToken = account.access_token;
+    async signIn({ profile: rawProfile }) {
+      const profile = rawProfile as GoogleProfile | undefined;
+
+      // 許可ドメイン以外のアカウントは、ユーザー登録より前に拒否する
+      const rejectionReason = getRejectionReason(
+        { email: profile?.email, emailVerified: profile?.email_verified, hostedDomain: profile?.hd },
+        process.env.ALLOWED_EMAIL_DOMAIN ?? ''
+      );
+      if (rejectionReason) {
+        console.warn(
+          JSON.stringify({
+            event: 'login_rejected',
+            reason: rejectionReason,
+            email: profile?.email ?? '',
+            timestamp: new Date().toISOString(),
+            source: 'frontend',
+          })
+        );
+        return '/login?error=DomainNotAllowed';
       }
-      // Azure ADのオブジェクトID (oid) を token.sub (userIdとして使用) に明示的にマッピングする
-      // Azure ADのsubクレームはoidと異なるペアワイズIDの場合があり、ポータル上のオブジェクトID (oid) と一致しません。
-      if (profile && profile.oid) {
-        token.sub = profile.oid;
+
+      // Google の sub を userId として Users に登録する（token.sub にも sub が入る）
+      try {
+        await syncUser({
+          userId: profile?.sub ?? '',
+          email: profile?.email ?? '',
+          name: profile?.name,
+        });
+        return true;
+      } catch (error) {
+        console.error('ユーザー登録に失敗しました:', error);
+        return '/login?error=RegistrationFailed';
       }
-      return token;
     },
     async session({ session, token }: any) {
-      // セッションにアクセストークンを追加
-      session.accessToken = token.accessToken;
       // JWTトークンからユーザーIDを取得し、権限とロールを取得してセッションに追加
       if (token && token.sub) {
         try {

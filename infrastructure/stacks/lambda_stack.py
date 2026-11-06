@@ -10,6 +10,7 @@ from aws_cdk import (
     aws_apigatewayv2_integrations as apigwv2_integrations,
     aws_events as events,
     aws_events_targets as targets,
+    Annotations,
     CfnOutput,
 )
 import aws_cdk.aws_lambda_python_alpha as lambda_python
@@ -21,15 +22,18 @@ class LambdaStack(Stack):
                  pc_usage_histories_table=None, system_activity_table=None, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
+        # ログインを許可するメールドメイン（デプロイ時の環境変数から取得）
+        # 未設定でもデプロイは続行する（他のスタックのデプロイを妨げないため）。空の場合、Lambda はログイン時のユーザー登録を拒否する
+        allowed_email_domain = os.environ.get("ALLOWED_EMAIL_DOMAIN", "").strip()
+        if not allowed_email_domain:
+            Annotations.of(self).add_warning(
+                "ALLOWED_EMAIL_DOMAIN が未設定です。このままデプロイすると、ログイン時のユーザー登録が失敗し、ログインできません。"
+            )
+
         internal_proxy_key_id = self.node.try_get_context("internalProxyKeyId") or "current"
         if internal_proxy_key_id not in {"current", "next"}:
             raise ValueError("internalProxyKeyId must be 'current' or 'next'")
 
-        # Azure AD シークレットの参照
-        # 事前に AWS Secrets Manager に 'AzureAdSecrets' という名前で登録されている想定
-        azure_ad_secrets = secretsmanager.Secret.from_secret_name_v2(
-            self, "AzureAdSecrets", "AzureAdSecrets"
-        )
         internal_proxy_secret = secretsmanager.Secret.from_secret_name_v2(
             self, "InternalProxySecret", "InternalProxySigningSecret"
         )
@@ -49,7 +53,7 @@ class LambdaStack(Stack):
             environment={
                 "USERS_TABLE_NAME": users_table.table_name if users_table else "Users",
                 "PCS_TABLE_NAME": pcs_table.table_name if pcs_table else "PCs",
-                "AZURE_AD_SECRET_NAME": "AzureAdSecrets",
+                "ALLOWED_EMAIL_DOMAIN": allowed_email_domain,
                 "SYSTEM_ACTIVITY_TABLE_NAME": system_activity_table.table_name if system_activity_table else "SystemActivity",
                 "ECS_CLUSTER_NAME": "PCManagementCluster",
                 "ECS_SERVICE_NAME": "PCManagementService",
@@ -62,7 +66,6 @@ class LambdaStack(Stack):
         )
 
         # シークレットへの読み取り権限を追加
-        azure_ad_secrets.grant_read(api_lambda)
         internal_proxy_secret.grant_read(api_lambda)
 
         # DynamoDBへのアクセス権限を追加
