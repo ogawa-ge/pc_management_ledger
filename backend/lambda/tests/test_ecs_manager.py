@@ -185,3 +185,86 @@ def test_invalid_runtime_activity_fails_open(
     assert result["status"] == "skip"
     assert result["reason"] == "invalid_runtime_activity"
     assert "invalid_runtime_activity" in caplog.text
+
+
+def test_auto_sleep_stops_abandoned_task_in_starting_state(
+    ecs_manager, lambda_aws_clients, fixed_now
+):
+    ecs_manager.clock = lambda: fixed_now
+    ecs_manager.get_ecs_status = Mock(return_value={"status": "active", "running_count": 1})
+    ecs_manager.stop_ecs = Mock(return_value={"status": "stopped"})
+    table = lambda_aws_clients["system_activity_table"]
+
+    # 1. 起動ロック期限経過かつ 2時間アイドル経過した STARTING 孤立タスクは自動停止される
+    table.get_item.return_value = {
+        "Item": {
+            "runtimeState": "STARTING",
+            "generation": Decimal(3),
+            "inFlightCount": Decimal(0),
+            "lastActivityAt": (fixed_now - timedelta(hours=2, minutes=1)).isoformat(),
+            "startLockExpiresAt": Decimal(int(fixed_now.timestamp()) - 3600),
+        }
+    }
+    table.update_item.return_value = {}
+
+    result = ecs_manager.check_and_auto_sleep(check_id="abandoned-starting-check")
+
+    assert result["status"] == "auto_slept"
+    ecs_manager.stop_ecs.assert_called_once_with(reason="idle_timeout", expected_generation=3)
+    stop_condition = table.update_item.call_args.kwargs["ConditionExpression"]
+    assert "runtimeState=:starting" in stop_condition
+    assert "startLockExpiresAt <= :nowEpoch" in stop_condition
+
+    # 2. 起動ロックがまだ有効期間内の STARTING タスクは停止しない
+    ecs_manager.stop_ecs.reset_mock()
+    table.get_item.return_value = {
+        "Item": {
+            "runtimeState": "STARTING",
+            "generation": Decimal(4),
+            "inFlightCount": Decimal(0),
+            "lastActivityAt": (fixed_now - timedelta(hours=2, minutes=1)).isoformat(),
+            "startLockExpiresAt": Decimal(int(fixed_now.timestamp()) + 120),
+        }
+    }
+
+    active_result = ecs_manager.check_and_auto_sleep(check_id="active-starting-lock-check")
+
+    assert active_result == {"status": "active", "reason": "start_lock_active"}
+    ecs_manager.stop_ecs.assert_not_called()
+
+
+def test_auto_sleep_falls_back_when_last_activity_missing(
+    ecs_manager, lambda_aws_clients, fixed_now
+):
+    ecs_manager.clock = lambda: fixed_now
+    ecs_manager.get_ecs_status = Mock(return_value={"status": "active", "running_count": 1})
+    ecs_manager.stop_ecs = Mock(return_value={"status": "stopped"})
+    table = lambda_aws_clients["system_activity_table"]
+    table.update_item.return_value = {}
+
+    # 1. lastActivityAt 欠落時、第1候補 startRequestedAt が優先評価される（1時間前なら active）
+    table.get_item.return_value = {
+        "Item": {
+            "runtimeState": "RUNNING",
+            "generation": Decimal(5),
+            "inFlightCount": Decimal(0),
+            "startRequestedAt": (fixed_now - timedelta(hours=1)).isoformat(),
+            "lastAcceptedAt": (fixed_now - timedelta(hours=3)).isoformat(),
+        }
+    }
+    res_first = ecs_manager.check_and_auto_sleep(check_id="fallback-priority-check")
+    assert res_first["status"] == "active"
+    ecs_manager.stop_ecs.assert_not_called()
+
+    # 2. lastActivityAt と startRequestedAt が両方欠落時、第2候補 lastAcceptedAt で2時間経過なら停止
+    table.get_item.return_value = {
+        "Item": {
+            "runtimeState": "RUNNING",
+            "generation": Decimal(6),
+            "inFlightCount": Decimal(0),
+            "lastAcceptedAt": (fixed_now - timedelta(hours=2, minutes=5)).isoformat(),
+        }
+    }
+    res_second = ecs_manager.check_and_auto_sleep(check_id="fallback-accepted-check")
+    assert res_second["status"] == "auto_slept"
+    ecs_manager.stop_ecs.assert_called_once_with(reason="idle_timeout", expected_generation=6)

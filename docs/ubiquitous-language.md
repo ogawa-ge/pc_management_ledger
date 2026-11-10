@@ -66,6 +66,10 @@ PCの現在の状態を表します。（`status` カラムの値）
 | **Runtime Generation** | 稼働世代 | 起動・停止と新規操作の競合を検出する単調増加番号。停止処理後に世代が変化していれば、新しい操作を優先して再起動する。 | `generation` |
 | **Internal Request Signature** | 内部要求署名 | Lambdaから公開IPのECSへ転送する要求について、メソッド、正規化URL、本文、要求ID、冪等キー、送信時刻、秘密世代をHMAC-SHA256で保護する署名。利用者認証・認可を代替しない。 | `X-Internal-Signature` および関連する `X-Internal-*` ヘッダー |
 | **Secret Generation** | 秘密世代 | 内部要求署名用共有秘密のローテーション単位。Lambdaは現行1世代で署名し、ECSは移行中だけ現行・次期の最大2世代を検証する。 | `keyId`, `current`, `next` |
+| **System Activity** | システム活動状態 | バックエンド全体の稼働状態および活動時刻・処理中要求数・起動ロック等を保持する単一集約レコード。 | `SystemActivity` テーブル (`entityId="global"`) |
+| **Last Activity Time** | 最終活動時刻 | アイドル自動停止（2時間経過判定）の基準となる最終有効活動時刻。起動要求受付時（`record_request_accepted` / `_claim_start`）に現在時刻で初期化され、業務要求の正常完了時（`finish_in_flight(succeeded=True)`）に最新時刻へ更新される。 | `lastActivityAt`（フォールバック: `startRequestedAt` → `lastAcceptedAt`） |
+| **Routing Gate** | ルーティングゲート | 受信したHTTP要求のパスを判定し、正規業務APIパス（`/api/*`）のみをバックエンド処理基盤の起動・転送対象とし、非業務パス（`/robots.txt` 等）は起動処理を行わず即座に 404 Not Found で遮断する境界。 | `@app.api_route("/api/{path:path}")`, `proxy_to_ecs` |
+| **Idle Auto-Sleep Patrol** | 定期アイドル監視パトロール | 15分間隔で実行され、`inFlightCount == 0` かつ `lastActivityAt` から規定アイドル時間（7,200秒＝2時間）が経過した稼働中または起動ロック期限切れの孤立タスクを検知して自動停止（タスク数0）させる制御処理。 | `check_and_auto_sleep`, `lambda_handler_cloudwatch_timeout_check` |
 
 ---
 ※ 新しい用語や概念が登場した場合は、実装前に必ずこのドキュメントを更新し、チーム全体（AI含む）で認識を同期させてください。

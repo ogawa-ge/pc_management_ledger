@@ -84,8 +84,30 @@ def test_acceptance_updates_last_accepted_and_initializes_runtime(
     assert result == {"stop_cancelled": False}
     initialization = table.update_item.call_args_list[0].kwargs
     assert "lastAcceptedAt=:now" in initialization["UpdateExpression"]
+    assert "lastActivityAt=if_not_exists(lastActivityAt,:now)" in initialization["UpdateExpression"]
     assert "inFlightCount=if_not_exists(inFlightCount,:zero)" in initialization["UpdateExpression"]
     assert initialization["ExpressionAttributeValues"][":zero"] == Decimal(0)
+
+
+def test_start_ecs_initializes_last_activity_at(
+    ecs_manager, lambda_aws_clients, fixed_now
+):
+    ecs_manager.clock = lambda: fixed_now
+    ecs = lambda_aws_clients["ecs"]
+    table = lambda_aws_clients["system_activity_table"]
+    ecs.describe_services.return_value = {
+        "services": [{"desiredCount": 0, "runningCount": 0, "status": "ACTIVE"}]
+    }
+    ecs.update_service.return_value = {"service": {"serviceArn": "service/test"}}
+    table.get_item.return_value = {"Item": {"runtimeState": "STOPPED", "generation": Decimal(1)}}
+    table.update_item.return_value = {"Attributes": {"generation": Decimal(2)}}
+
+    result = ecs_manager.start_ecs(request_id="req-init-activity")
+
+    assert result["status"] == "started"
+    claim_call = table.update_item.call_args_list[0].kwargs
+    assert "lastActivityAt=if_not_exists(lastActivityAt,:now)" in claim_call["UpdateExpression"]
+    assert claim_call["ExpressionAttributeValues"][":now"] == fixed_now.isoformat()
 
 
 def test_begin_in_flight_atomically_increments_counter(ecs_manager, lambda_aws_clients):
