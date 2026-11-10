@@ -104,11 +104,12 @@ def sync_user_endpoint(req: SyncUserRequest):
         print(f"Error syncing user: {e}")
         return JSONResponse(status_code=500, content={"detail": "Failed to sync user"})
 
-# 資産管理 API (ECSへのリバースプロキシ)
-@app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"])
+# 資産管理 API (ECSへのリバースプロキシ: /api/* パスのみを許可し非業務パスは 404 遮断)
+@app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"])
 async def proxy_to_ecs(path: str, request: Request):
     """
     資産管理 API (/api/pcs/* 等) へのリクエストを ECS (Fargate) にプロキシ転送します。
+    非 /api/* パス (/robots.txt, /favicon.ico 等) は本ルートにマッチせず FastAPI により即座に 404 応答されます。
     ECS がスリープ中の場合は、自動起動をトリガーして 503 (Retry-After) を返します。
     """
     # 1. 受付を記録し、ECSManager で ECS の起動確認と IP 取得
@@ -140,8 +141,10 @@ async def proxy_to_ecs(path: str, request: Request):
     query_params = list(request.query_params.multi_items())
     query_string = f"?{urlencode(query_params)}" if query_params else ""
     
-    # 転送先 URL
-    target_url = f"http://{public_ip}:80/{path}{query_string}"
+    # 転送先 URL (/api/{path} に正規化)
+    clean_path = path.lstrip("/")
+    api_path = f"/api/{clean_path}" if clean_path else "/api"
+    target_url = f"http://{public_ip}:80{api_path}{query_string}"
     
     # ヘッダーの引き継ぎ (Hostヘッダーは上書き)
     headers = strip_internal_headers(
@@ -157,7 +160,7 @@ async def proxy_to_ecs(path: str, request: Request):
     headers.update(
         signer.sign(
             method=method,
-            path_with_query=f"/{path}{query_string}",
+            path_with_query=f"{api_path}{query_string}",
             body=body,
             idempotency_key=idempotency_key,
             request_id=internal_request_id,

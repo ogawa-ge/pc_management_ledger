@@ -122,14 +122,16 @@ class ECSManager:
             return None
 
     def record_request_accepted(self, request_id: Optional[str] = None) -> Dict[str, Any]:
-        """受付時刻を更新し、停止中なら新しい起動世代へ進める。"""
+        """受付時刻を更新し、lastActivityAt を初期化する。停止中なら新しい起動世代へ進める。"""
         now_value = self._now()
         now = now_value.isoformat()
         owner = request_id or str(uuid.uuid4())
+        # T001/T003/T009: 初回要求受付時点で lastActivityAt を現在時刻で初期化する
         self.system_activity_table.update_item(
             Key={"entityId": "global"},
             UpdateExpression=(
                 "SET lastAcceptedAt=:now, "
+                "lastActivityAt=if_not_exists(lastActivityAt,:now), "
                 "runtimeState=if_not_exists(runtimeState,:stopped), "
                 "generation=if_not_exists(generation,:zero), "
                 "inFlightCount=if_not_exists(inFlightCount,:zero), "
@@ -146,6 +148,7 @@ class ECSManager:
                 Key={"entityId": "global"},
                 UpdateExpression=(
                     "SET runtimeState=:starting, generation=generation+:one, "
+                    "lastActivityAt=if_not_exists(lastActivityAt,:now), "
                     "startRequestedAt=:now, lastStateChangedAt=:now, "
                     "startOwnerRequestId=:owner, startLockExpiresAt=:expiry"
                 ),
@@ -160,10 +163,20 @@ class ECSManager:
                 },
                 ReturnValues="ALL_NEW",
             )
+            self._log_audit(
+                "record_request_accepted",
+                "stop_cancelled",
+                {"request_id": owner, "lastActivityAt": now},
+            )
             return {"stop_cancelled": True, **response.get("Attributes", {})}
         except ClientError as error:
             if not self._is_conditional_failure(error):
                 raise
+        self._log_audit(
+            "record_request_accepted",
+            "accepted",
+            {"request_id": owner, "lastActivityAt": now},
+        )
         return {"stop_cancelled": False}
 
     def begin_in_flight(self) -> None:
@@ -213,12 +226,14 @@ class ECSManager:
         now_epoch = Decimal(int(now.timestamp()))
         lock_expiry = Decimal(int(now.timestamp()) + self.start_lock_seconds)
         try:
+            # T001/T003/T009: 起動ロック取得時にも lastActivityAt を現在時刻で初期化する
             response = self.system_activity_table.update_item(
                 Key={"entityId": "global"},
                 UpdateExpression=(
                     "SET runtimeState=:starting, "
                     "generation=if_not_exists(generation,:zero)+:one, "
                     "inFlightCount=if_not_exists(inFlightCount,:zero), "
+                    "lastActivityAt=if_not_exists(lastActivityAt,:now), "
                     "startOwnerRequestId=:owner, startRequestedAt=:now, "
                     "startLockExpiresAt=:expiry, lastStateChangedAt=:now"
                 ),
@@ -241,7 +256,17 @@ class ECSManager:
                 },
                 ReturnValues="ALL_NEW",
             )
-            return int(response.get("Attributes", {}).get("generation", 1))
+            generation_val = int(response.get("Attributes", {}).get("generation", 1))
+            self._log_audit(
+                "claim_start",
+                "claimed",
+                {
+                    "owner_request_id": owner,
+                    "generation": generation_val,
+                    "lastActivityAt": now_iso,
+                },
+            )
+            return generation_val
         except ClientError as error:
             if self._is_conditional_failure(error):
                 return None
@@ -449,7 +474,6 @@ class ECSManager:
             return {"status": "already_sleeping", "message": "ECS is already in sleep state"}
 
         runtime = self._runtime_item()
-        activity_value = last_activity_timestamp or runtime.get("lastActivityAt")
         in_flight = runtime.get("inFlightCount")
         generation = runtime.get("generation")
         if not isinstance(in_flight, (int, Decimal)) or in_flight < 0:
@@ -458,13 +482,39 @@ class ECSManager:
             return {"status": "active", "reason": "in_flight", "in_flight_count": int(in_flight)}
         if not isinstance(generation, (int, Decimal)) or generation < 0:
             return self._invalid_activity(check_id, "generation is missing or invalid")
-        try:
-            last_activity = self._parse_activity_timestamp(activity_value)
-        except (TypeError, ValueError) as error:
-            return self._invalid_activity(check_id, str(error))
+
+        # T010: lastActivityAt が未設定または読み取れない場合、startRequestedAt -> lastAcceptedAt の優先順でフォールバック評価
+        candidates = [
+            last_activity_timestamp,
+            runtime.get("lastActivityAt"),
+            runtime.get("startRequestedAt"),
+            runtime.get("lastAcceptedAt"),
+        ]
+        last_activity = None
+        last_parse_error = "lastActivityAt is missing"
+        for candidate in candidates:
+            if candidate is None or candidate == "":
+                continue
+            try:
+                last_activity = self._parse_activity_timestamp(candidate)
+                break
+            except (TypeError, ValueError) as error:
+                last_parse_error = str(error)
+
+        if last_activity is None:
+            return self._invalid_activity(check_id, last_parse_error)
+
         now = self._now()
         if last_activity > now:
             return self._invalid_activity(check_id, "lastActivityAt is in the future")
+
+        now_epoch = Decimal(int(now.timestamp()))
+        # T011: STARTING 状態のタスクについては、起動ロック期限 (startLockExpiresAt <= nowEpoch) 経過を確認
+        if runtime.get("runtimeState") == "STARTING":
+            lock_expires_at = runtime.get("startLockExpiresAt")
+            if isinstance(lock_expires_at, (int, Decimal)) and Decimal(int(lock_expires_at)) > now_epoch:
+                return {"status": "active", "reason": "start_lock_active"}
+
         idle_time = (now - last_activity).total_seconds()
         if idle_time < self.idle_timeout_seconds:
             return {
@@ -479,18 +529,22 @@ class ECSManager:
                 Key={"entityId": "global"},
                 UpdateExpression="SET runtimeState=:stopping, stopRequestedAt=:now, lastStateChangedAt=:now",
                 ConditionExpression=(
-                    "runtimeState=:running AND generation=:generation AND "
-                    "inFlightCount=:zero AND lastActivityAt <= :boundary"
+                    "(runtimeState=:running OR (runtimeState=:starting AND "
+                    "(attribute_not_exists(startLockExpiresAt) OR startLockExpiresAt <= :nowEpoch))) "
+                    "AND generation=:generation AND inFlightCount=:zero "
+                    "AND (attribute_not_exists(lastActivityAt) OR lastActivityAt <= :boundary)"
                 ),
                 ExpressionAttributeValues={
                     ":stopping": "STOPPING",
                     ":running": "RUNNING",
+                    ":starting": "STARTING",
                     ":generation": Decimal(generation_int),
                     ":zero": Decimal(0),
                     ":boundary": datetime.fromtimestamp(
                         now.timestamp() - self.idle_timeout_seconds, timezone.utc
                     ).isoformat(),
                     ":now": now.isoformat(),
+                    ":nowEpoch": now_epoch,
                 },
             )
         except ClientError as error:
@@ -498,6 +552,11 @@ class ECSManager:
                 return {"status": "active", "reason": "stop_gate_changed"}
             raise
         result = self.stop_ecs(reason="idle_timeout", expected_generation=generation_int)
+        self._log_audit(
+            "check_idle_timeout",
+            "auto_slept" if result.get("status") == "stopped" else str(result.get("status")),
+            {"check_id": check_id, "idle_time_seconds": idle_time, "generation": generation_int},
+        )
         return {
             "status": "auto_slept" if result.get("status") == "stopped" else result.get("status"),
             "idle_time_seconds": idle_time,
