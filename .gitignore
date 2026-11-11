@@ -12,6 +12,8 @@ coverage/
 __pycache__/
 *.pyc
 .venv/
+.venvs/
+.local/
 venv/
 *.egg-info/
 .pytest_cache
