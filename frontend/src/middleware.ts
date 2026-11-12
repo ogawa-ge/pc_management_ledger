@@ -30,6 +30,6 @@ export const config = {
      * ミドルウェアを適用するパスのマッチパターンを定義
      * 例: '/(api|auth|dashboard)/(.*)'
      */
-    '/((?!api|_next/static|_next/image|favicon.ico).*)',
+    '/((?!api|_next/static|_next/image|favicon.ico|google.*\\.html|robots\\.txt).*)',
   ],
 };
