@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-12
 
-**Status**: Draft
+**Status**: Completed
 
 **Input**: User description: "Googleセーフブラウジング誤検知（赤画面）対策としてSearch Console所有権確認用HTML追加と認証リダイレクト除外設定"
 
