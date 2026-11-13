@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-06
 
-**Status**: Draft
+**Status**: Completed
 
 **Input**: User description: "GitHub Issue #27: fix: ボット等の非APIパスアクセスによるECS不要起動とlastActivityAt未設定による自動停止スキップの防止"
 

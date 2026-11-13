@@ -1,8 +1,8 @@
 # Quickstart & Validation Guide: ボットアクセスによる不要起動防止と自動停止の確実化
 
 **Feature**: `005-prevent-bot-ecs-wakeup`  
-**Status**: Ready  
-**Last Updated**: 2026-11-06  
+**Status**: Completed  
+**Last Updated**: 2026-11-13  
 
 ---
 
@@ -68,3 +68,21 @@ curl -i http://localhost:8000/api/pcs
 # => HTTP/1.1 503 Service Unavailable
 # => Retry-After: 15
 ```
+
+---
+
+## 4. 本番環境（AWS）へのデプロイ反映と実機検証記録（2026-11-13）
+
+### 4.1 事象の再発確認と原因特定
+- 2026-11-13 06:12 JST に外部クローラーによる `GET /robots.txt` アクセスが発生し、ECS タスクが起動（`generation: 11`）して `runtimeState = "STARTING"` のまま停止スキップされる事象を確認。
+- 原因は、`main` ブランチへのマージ時点では Amplify（フロントエンド）のみ自動デプロイされ、バックエンドの `ApiLambda` および `TimeoutCheckLambda` が 2026-11-06 時点の旧コードのまま稼働していたためと特定。
+
+### 4.2 本番 Lambda へのデプロイと実機検証結果
+1. **Lambda 関数の更新（2026-11-13 14:33 JST）**:
+   - 本番環境の `ApiLambda` および `TimeoutCheckLambda` に Issue #27 の修正済みコード（`src/main.py`、`src/services/ecs_manager.py`）をデプロイ反映。
+2. **自動スリープ動作の実機検証**:
+   - `SystemActivity` テーブル（`entityId="global"`）の活動時刻をアイドル閾値（2時間）超過状態に設定し、本番 `TimeoutCheckLambda` を実行。
+   - `{"status": "auto_slept", "action_result": {"status": "stopped", "desired_count": 0}}` が返却され、ECS サービスが `desiredCount = 0`（`runtimeState = "STOPPED"`）へ正常に遷移することを確認。
+3. **スリープ状態での非業務パス遮断検証**:
+   - ECS が停止（`desiredCount = 0`）している状態で、本番 API Gateway エンドポイント（`https://<api-id>.execute-api.ap-northeast-1.amazonaws.com`）に対し `GET /robots.txt` および `GET /favicon.ico` を実行。
+   - 両リクエストとも即座に `HTTP 404: {"detail":"Not Found"}` が返却され、アクセス後も `ECS desiredCount = 0` および `SystemActivity.runtimeState = "STOPPED"` が維持される（不要な ECS 起動が一切発生しない）ことを実機で確認完了。
