@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-14
 
-**Status**: Clarified
+**Status**: Completed
 
 **Input**: User description: "Issues #10: Teamsでログインしてもエラーが発生しました: Failed to fetch PC listが表示されてしまう。現在、3人でログイン試しているが、2人は成功、1人が上記エラー。原因がわからない。"
 
