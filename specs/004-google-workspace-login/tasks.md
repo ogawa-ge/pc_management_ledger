@@ -104,8 +104,8 @@ description: "Task list for ログイン方式のGoogle Workspaceへの変更 (I
 - [X] T019 `cd backend && pytest tests -k sync_user` を実行し、すべて成功することを確認する
 - [X] T020 `cd frontend && npm run build` を実行し、型エラー・ビルドエラーがないことを確認する
 - [X] T021 quickstart.md「4. 手動での確認シナリオ」の 1〜9 をローカルで実施し、結果を確認する（2026-10-23・10-30 確認。ローカルの Lambda は Users をメモリ上の仮テーブルに差し替えて実施（この PC の IAM ユーザーに DynamoDB 権限がないため）。シナリオ 1〜5・8・9 は期待どおり。シナリオ 6・7: Google 側が `hd` 指定により `@genuine-pt.jp` 以外のアカウントを入力させず、アプリ側の拒否処理には到達しない。アプリ側の拒否は判定関数の動作確認と pytest で確認済みとし、画面での確認は省略（ユーザー判断）。同意画面でのキャンセルは `/login?error=Callback` で「ログインに失敗しました…」が表示されることを実機で確認）
-- [ ] T022 quickstart.md「5. 本番（新 Amplify）への切り替え手順」に沿って切り替える（`NEXTAUTH_SECRET` の変更、CDK デプロイ、「6. 既存データの削除」、Amplify 再デプロイ、本番 URL でシナリオ 1〜9、「7. 最初の管理者の設定」）。Amplify の環境変数が実行時に読めない場合は、environment-setup.md「2」の amplify.yml の対応を行う
-- [ ] T023 CDK デプロイ後、Secrets Manager 上の `AzureAdSecrets` を手動で削除する（environment-setup.md「5」）
+- [X] T022 quickstart.md「5. 本番（新 Amplify）への切り替え手順」に沿って切り替える（`NEXTAUTH_SECRET` の変更、CDK デプロイ、「6. 既存データの削除」、Amplify 再デプロイ、本番 URL でシナリオ 1〜9、「7. 最初の管理者の設定」）。Amplify の環境変数が実行時に読めない場合は、environment-setup.md「2」の amplify.yml の対応を行う（2026-11-06〜11-12 実施。AWS は新アカウントで再構築されたため、新アカウントで切り替えた。CDK は 004 ブランチから LambdaStack のみデプロイ（11/6）→ PR #28 を main にマージ → 新 Amplify で NEXTAUTH_SECRET を更新し AZURE_AD_* を削除 → 再ビルド。既存データの削除は、新アカウントで一から構築されたため不要。最初の管理者は別メンバーが手作業で設定。本番で `@genuine-pt.jp` のログインと Users への登録（role=User、userId は Google の sub）を確認（11/11）。個人の Gmail アカウントは Google 側で「エラー 403: org_internal」としてブロックされることを確認（11/12）。途中で Amplify の環境変数名の末尾の空白、`GOOGLE_CLIENT_ID` の値の末尾欠け（aud mismatch）を修正。Chrome の「危険なサイト」警告は Issue #29 で対応）
+- [X] T023 CDK デプロイ後、Secrets Manager 上の `AzureAdSecrets` を手動で削除する（environment-setup.md「5」）（2026-11-18 実施。新アカウントの `AzureAdSecrets` を猶予期間7日で削除予定にした（完全削除は 2026-11-25）。削除前に Lambda・ECS・CloudFormation のどこからも参照がないことを確認）
 
 ---
 
