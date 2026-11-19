@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-16
 
-**Status**: Draft
+**Status**: Completed
 
 **Input**: User description: "GitHub Issue #19 ログインをteamsからgoogle workspaceに変更"
 
