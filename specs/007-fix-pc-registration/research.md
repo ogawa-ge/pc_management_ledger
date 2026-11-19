@@ -69,3 +69,19 @@
 
 ## Decision 5: スコープ外の所見（認証・認可まわり）
 - 分析中に、依存パッケージ更新と併せて検討すべき認証・認可まわりの強化項目（トークン検証用の鍵の扱い、ECS 側の利用者認証方式、一部エンドポイントの認証有無）を確認した。公開リポジトリのため詳細はここに記載せず、**Issue #32 に追記して対応方針を管理**する。本 Issue #30 では変更しない。
+
+---
+
+## Decision 6: 本番実機確認（T008）で判明した `POST /api/pcs` 502 タイムアウトの原因と対策（2026-11-19）
+- **観測された事象**:
+  - `EcsStack` へ `Users` テーブル読み取り権限をデプロイ後、本番実機で PC 新規登録（`POST /api/pcs`）を実行したところ、ECS 起動完了後に `サーバーでエラーが発生しました`（HTTP 502）が発生。
+  - 稼働中の ECS に対し API Gateway 経由で疎通診断した結果：
+    - `GET /api/pcs` ➔ `HTTP 200: []`（即座に成功）
+    - `POST /api/pcs` ➔ `HTTP 502: Failed to forward request to ECS: Read timed out. (read timeout=25.0)`（25秒タイムアウト、ECS ログにも応答記録なし）
+- **根本原因**:
+  - `backend/ecs/src/main.py` の `@app.middleware("http")`（内部実装: Starlette `BaseHTTPMiddleware`）内の `verify_internal_proxy_request` が `body = await request.body()` でリクエスト本文ストリームを消費した後に `request._body = body` としていた。
+  - Starlette の `BaseHTTPMiddleware` の仕様上、`request._body` への代入は下流のルートハンドラ（`POST /api/pcs` 等の Pydantic モデル解析や `await request.body()`）へ引き継がれず、**リクエスト本文を持つすべての `POST` リクエストが内部で永遠に本文待ち（デッドロック）となり 25 秒後に 502 タイムアウト**する。
+  - 単体テスト時は `INTERNAL_PROXY_SECRET_ARN` 未設定（`verifier.enabled == False`）のため `request.body()` が呼ばれず、本番環境のみで顕在化していた。
+- **Decision**:
+  - `backend/ecs/src/main.py` の `verify_internal_proxy_request` を `@app.middleware("http")`（`BaseHTTPMiddleware`）から、受信した本文を後続の `receive` コールバックへ正しく再送する**純粋な ASGI ミドルウェア（`InternalProxyVerificationMiddleware`）**へ置き換える。
+  - 署名検証を有効化した状態で `POST` リクエスト本文がデッドロックせず下流へ届くことを検証する回帰テストを `backend/ecs/tests/test_internal_request_verifier.py` に追加する。

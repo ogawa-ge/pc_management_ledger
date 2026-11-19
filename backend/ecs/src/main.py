@@ -31,28 +31,72 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "../../../.env.l
 app = FastAPI()
 
 
-@app.middleware("http")
-async def verify_internal_proxy_request(request: Request, call_next):
-    if request.url.path == "/":
-        return await call_next(request)
-    verifier = InternalRequestVerifier()
-    if not verifier.enabled:
-        return await call_next(request)
-    body = await request.body()
-    result = verifier.verify(
-        method=request.method,
-        path_with_query=request.url.path
-        + (f"?{request.url.query}" if request.url.query else ""),
-        body=body,
-        headers=dict(request.headers),
-    )
-    if not result.valid:
-        return JSONResponse(
-            status_code=403,
-            content={"status": "forbidden", "reason": result.reason},
+class InternalProxyVerificationMiddleware:
+    """
+    純粋 ASGI ミドルウェアとして内部要求署名を検証する。
+    BaseHTTPMiddleware (@app.middleware("http")) で await request.body() を呼ぶと
+    後続の POST ハンドラで本文ストリームが再読込できずデッドロックするため、
+    受信した本文を replay_receive で下流へ引き継ぐ。
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or scope.get("path") == "/":
+            await self.app(scope, receive, send)
+            return
+
+        verifier = InternalRequestVerifier()
+        if not verifier.enabled:
+            await self.app(scope, receive, send)
+            return
+
+        chunks = []
+        more_body = True
+        while more_body:
+            message = await receive()
+            if message["type"] == "http.request":
+                chunks.append(message.get("body", b""))
+                more_body = message.get("more_body", False)
+            elif message["type"] == "http.disconnect":
+                return
+        body = b"".join(chunks)
+
+        query_string = scope.get("query_string", b"").decode("latin-1")
+        path_with_query = scope["path"] + (f"?{query_string}" if query_string else "")
+        headers = {
+            key.decode("latin-1"): value.decode("latin-1")
+            for key, value in scope.get("headers", [])
+        }
+
+        result = verifier.verify(
+            method=scope["method"],
+            path_with_query=path_with_query,
+            body=body,
+            headers=headers,
         )
-    request._body = body
-    return await call_next(request)
+        if not result.valid:
+            response = JSONResponse(
+                status_code=403,
+                content={"status": "forbidden", "reason": result.reason},
+            )
+            await response(scope, receive, send)
+            return
+
+        body_sent = False
+
+        async def replay_receive():
+            nonlocal body_sent
+            if not body_sent:
+                body_sent = True
+                return {"type": "http.request", "body": body, "more_body": False}
+            return await receive()
+
+        await self.app(scope, replay_receive, send)
+
+
+app.add_middleware(InternalProxyVerificationMiddleware)
 
 app.add_middleware(
     CORSMiddleware,

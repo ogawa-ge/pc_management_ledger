@@ -69,7 +69,9 @@
 
 - [x] T006 [P] `.venv` に `pytest` が未導入の場合は `infrastructure/requirements-dev.txt` を導入したうえで、`.\.venv\Scripts\pytest.exe infrastructure/tests/unit/` を実行し、既存テストを含め全件パスすることを確認する（※`test_infrastructure_stack.py` 3件・`test_ecs_cost_optimization.py` 3件・`test_internal_proxy_signing_generation_rejects_unknown_selector` 1件の計7件は PASS。`LambdaStack` の `PythonFunction` ビルドを伴う残り6件はローカル Docker 未稼働・環境制約により `docker exited with status 125` で失敗）
 - [x] T007 [P] `frontend/` の変更差分・型整合性（ローカルに `frontend/node_modules` がある場合は `npm run build`、未導入の場合は構文・型検証およびデプロイ時の Amplify ビルド確認）および `git diff` を確認し、Issue #30（`specs/007-fix-pc-registration/plan.md`）のスコープ外の変更（他画面や Issue #32 対象の依存パッケージ更新・認証強化など）が混入していないことを検証する
-- [ ] T008 `specs/007-fix-pc-registration/quickstart.md` §3〜§4 の手順に従い、`cdk diff EcsStack` で想定差分を確認して `cdk deploy EcsStack` を実行し、`main` へのプッシュ（Amplify 自動デプロイ）後に本番で PC 新規登録を実機確認する（一般ユーザーは必須、管理者は管理者アカウントを用意できた場合）（`T006`, `T007` 完了後）
+- [x] T009 [US1] `backend/ecs/src/main.py` の `verify_internal_proxy_request` を `@app.middleware("http")`（`BaseHTTPMiddleware`）から、受信した本文を後続の `receive` へ再送する純粋 ASGI ミドルウェア（`InternalProxyVerificationMiddleware`）へ書き換え、`POST /api/pcs` 等の本文付きリクエストでのデッドロック（502 タイムアウト）を解消する（`research.md` Decision 6）
+- [x] T010 [US1] `backend/ecs/tests/test_internal_request_verifier.py` に、署名検証有効状態（`INTERNAL_PROXY_SECRET_ARN` 設定時）で JSON 本文付き `POST /api/pcs` がデッドロックせず下流ハンドラまで到達することを検証する回帰テストを追加し、テストを実行してパスすることを確認する（`T009` 完了後）
+- [ ] T008 `specs/007-fix-pc-registration/quickstart.md` §3〜§4 の手順に従い、`cdk diff EcsStack` で想定差分を確認して `cdk deploy EcsStack` を実行し、`main` へのプッシュ（Amplify 自動デプロイ）後に本番で PC 新規登録を実機確認する（一般ユーザーは必須、管理者は管理者アカウントを用意できた場合）（`T006`, `T007`, `T009`, `T010` 完了後）
 
 ---
 

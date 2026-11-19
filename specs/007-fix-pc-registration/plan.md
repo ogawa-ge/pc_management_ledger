@@ -74,8 +74,15 @@ frontend/
             └── register/
                 └── page.tsx                    # 【変更】fetchUsers の起動待機連動、エラー時の ECS起動待機表示の解除徹底、ボタン直上への日本語エラー表示
 
+backend/
+└── ecs/
+    ├── src/
+    │   └── main.py                             # 【変更】verify_internal_proxy_request を純粋 ASGI ミドルウェア化し、POST 本文読み込み時のデッドロック（502 タイムアウト）を解消
+    └── tests/
+        └── test_internal_request_verifier.py   # 【変更】署名検証有効時の POST リクエスト本文通過回帰テストを追加
+
 docs/
 └── ubiquitous-language.md                      # 【変更済み】新語（コールドスタート / ECS起動待機表示）を追記
 ```
 
-**Structure Decision**: 既存の `infrastructure/` と `frontend/` の構成を踏襲し、コード変更対象を上記5ファイルのみに限定する（用語追記は `docs/ubiquitous-language.md` のみ）。
+**Structure Decision**: 既存の `infrastructure/`、`frontend/`、`backend/ecs/` の構成を踏襲し、変更対象を上記7ファイルのみに限定する（用語追記は `docs/ubiquitous-language.md` のみ）。

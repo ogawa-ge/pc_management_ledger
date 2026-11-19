@@ -90,3 +90,56 @@ def test_canonical_field_tampering_is_rejected(method, path, header_name, header
     if header_name:
         headers[header_name] = header_value
     assert not verifier.verify(method, path, b"body", headers).valid
+
+
+def test_post_request_with_verification_enabled_replays_body_without_deadlock(monkeypatch):
+    import hashlib
+    import hmac
+    import time
+    from fastapi.testclient import TestClient
+
+    from src.main import app as ecs_app
+    from src.services.internal_request_verifier import (
+        InternalRequestVerifier as VerifierClass,
+        build_canonical_request,
+    )
+
+    secret_client = Mock()
+    secret_client.get_secret_value.return_value = {
+        "SecretString": json.dumps(
+            {"current": {"keyId": "generation-1", "secret": "test-secret"}}
+        )
+    }
+
+    now_ts = int(time.time())
+    monkeypatch.setattr(
+        "src.main.InternalRequestVerifier",
+        lambda: VerifierClass(
+            secret_arn="test-secret-arn",
+            secrets_client=secret_client,
+            clock=lambda: now_ts,
+        ),
+    )
+
+    body = json.dumps({"ownerId": "user-1", "pcType": "N", "pcName": "PC-1"}).encode("utf-8")
+    body_hash = hashlib.sha256(body).hexdigest()
+    canonical = build_canonical_request(
+        "POST", "/api/pcs", body_hash, "idem-replay-1", "req-replay-1", str(now_ts), "generation-1"
+    )
+    headers = {
+        "Content-Type": "application/json",
+        "Idempotency-Key": "idem-replay-1",
+        "X-Internal-Request-Id": "req-replay-1",
+        "X-Internal-Timestamp": str(now_ts),
+        "X-Internal-Body-SHA256": body_hash,
+        "X-Internal-Key-Id": "generation-1",
+        "X-Internal-Signature": hmac.new(
+            b"test-secret", canonical.encode(), hashlib.sha256
+        ).hexdigest(),
+    }
+
+    with TestClient(ecs_app) as client:
+        # 認証ヘッダーなしのため、ミドルウェアを正常通過して下流ハンドラの 401 に到達すること（デッドロックしないこと）
+        response = client.post("/api/pcs", content=body, headers=headers)
+        assert response.status_code == 401
+        assert response.json()["detail"] == "Authorization header required"
