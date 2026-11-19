@@ -51,10 +51,17 @@ const PCRegisterPage = () => {
     setUsers([]);
     setOwnerId('');
     try {
-      const userList = await getUsers(session.user.id);
+      const userList = await getUsers(session.user.id, {
+        onRetryStateChange: (retry) => {
+          ecsLoading.setStatus(retry.status === 'idle' ? 'starting' : retry.status);
+          ecsLoading.setRemainingSeconds(retry.remainingSeconds);
+          ecsLoading.setIsLoading(retry.status !== 'idle');
+        },
+      });
       setUsers(userList);
       setUserListStatus(userList.length === 0 ? 'empty' : 'success');
     } catch (error) {
+      ecsLoading.setIsLoading(false);
       console.error('ユーザーリストの取得に失敗しました:', error);
       setUserListError('ユーザー一覧を取得できませんでした。時間をおいて再試行してください。');
       setUserListStatus('error');
@@ -173,14 +180,25 @@ const PCRegisterPage = () => {
         router.push('/pcs');
       }, 2000);
     } catch (error) {
+      ecsLoading.setIsLoading(false);
       console.error('登録エラー:', error);
       if (error instanceof ApiError && error.status === 404) {
         setOwnerId('');
         setRegistrationError('選択したオーナーユーザーは利用できなくなりました。候補を再取得して選択し直してください。');
         setUserListStatus('error');
         setUserListError('オーナー候補が変更されています。再試行して最新の一覧を取得してください。');
+      } else if (error instanceof ApiError) {
+        if (error.status === 401 || error.status === 403) {
+          setRegistrationError('アクセス権限がありません。ログイン状態を確認してください。');
+        } else if (error.detail === 'start_timeout') {
+          setRegistrationError(error.message);
+        } else if (error.status >= 500) {
+          setRegistrationError('サーバーでエラーが発生しました。しばらく経ってから再試行してください。');
+        } else {
+          setRegistrationError('PCの登録に失敗しました。サーバーに一時的に接続できません。');
+        }
       } else {
-        setRegistrationError(error instanceof Error ? error.message : 'PCの登録に失敗しました。');
+        setRegistrationError('PCの登録に失敗しました。サーバーに一時的に接続できません。');
       }
     } finally {
       setIsSubmitting(false);
@@ -311,7 +329,13 @@ const PCRegisterPage = () => {
             )}
 
             {registrationError && (
-              <p role="alert" className="mb-4 text-red-600">{registrationError}</p>
+              <p
+                role="alert"
+                className="mb-4 text-red-600"
+                style={{ color: '#dc2626', fontWeight: 600 }}
+              >
+                {registrationError}
+              </p>
             )}
 
             <div className="form-group">
@@ -403,6 +427,16 @@ const PCRegisterPage = () => {
                 onChange={(e) => setGpu(e.target.value)}
               />
             </div>
+
+            {registrationError && (
+              <p
+                role="alert"
+                className="mb-4 text-red-600"
+                style={{ color: '#dc2626', fontWeight: 600, marginBottom: '0.75rem' }}
+              >
+                {registrationError}
+              </p>
+            )}
 
             <button
               type="submit"

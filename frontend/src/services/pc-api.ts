@@ -187,22 +187,15 @@ export const getPCs = async (status?: string, options: RetryOptions = {}) => {
 };
 
 // ユーザー一覧取得
-export const getUsers = async (userId: string): Promise<User[]> => {
+export const getUsers = async (userId: string, options: RetryOptions = {}): Promise<User[]> => {
   try {
-    const response = await fetch('/api/users', {
+    return await requestWithRetry<User[]>('/api/users', {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${userId}`,
       },
-    });
-
-    if (!response.ok) {
-      await throwApiError(response);
-    }
-
-    const result: User[] = await response.json();
-    return result;
+    }, options);
   } catch (error) {
     console.error('ユーザー一覧取得エラー:', error);
     throw error;

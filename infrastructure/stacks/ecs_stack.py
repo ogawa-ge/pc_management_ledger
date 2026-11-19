@@ -10,7 +10,7 @@ from constructs import Construct
 
 class EcsStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, 
-                 pcs_table=None, return_records_table=None, pc_usage_histories_table=None,
+                 users_table=None, pcs_table=None, return_records_table=None, pc_usage_histories_table=None,
                  system_activity_table=None, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
@@ -119,6 +119,8 @@ class EcsStack(Stack):
         )
 
         # DynamoDBへのアクセス権限を追加
+        if users_table:
+            users_table.grant_read_data(task_definition.task_role)
         if pcs_table:
             pcs_table.grant_read_write_data(task_definition.task_role)
         if pc_usage_histories_table:

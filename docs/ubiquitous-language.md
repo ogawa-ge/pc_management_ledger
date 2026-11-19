@@ -70,6 +70,8 @@ PCの現在の状態を表します。（`status` カラムの値）
 | **Last Activity Time** | 最終活動時刻 | アイドル自動停止（2時間経過判定）の基準となる最終有効活動時刻。起動要求受付時（`record_request_accepted` / `_claim_start`）に現在時刻で初期化され、業務要求の正常完了時（`finish_in_flight(succeeded=True)`）に最新時刻へ更新される。 | `lastActivityAt`（フォールバック: `startRequestedAt` → `lastAcceptedAt`） |
 | **Routing Gate** | ルーティングゲート | 受信したHTTP要求のパスを判定し、正規業務APIパス（`/api/*`）のみをバックエンド処理基盤の起動・転送対象とし、非業務パス（`/robots.txt` 等）は起動処理を行わず即座に 404 Not Found で遮断する境界。 | `@app.api_route("/api/{path:path}")`, `proxy_to_ecs` |
 | **Idle Auto-Sleep Patrol** | 定期アイドル監視パトロール | 15分間隔で実行され、`inFlightCount == 0` かつ `lastActivityAt` から規定アイドル時間（7,200秒＝2時間）が経過した稼働中または起動ロック期限切れの孤立タスクを検知して自動停止（タスク数0）させる制御処理。 | `check_and_auto_sleep`, `lambda_handler_cloudwatch_timeout_check` |
+| **Cold Start** | コールドスタート | ECSバックエンドが停止（`STOPPED`）状態から最初の要求を受けて起動し、稼働（`RUNNING`）するまでの待機期間。この間、ルーティングゲートは HTTP 503（`status: "starting"`）を返し、フロントエンドは自動で再試行する。 | `runtimeState=STARTING`, `Retry-After` |
+| **Startup Wait Display** | ECS起動待機表示 | コールドスタート中などの自動待機中に、スピナーと残り待機秒数を画面に表示するUI。成功・エラー・タイムアウトのいずれの場合も、待機が終われば必ず解除する。 | `ECSLoadingState` コンポーネント, `ecsLoading.setIsLoading` |
 
 ---
 ※ 新しい用語や概念が登場した場合は、実装前に必ずこのドキュメントを更新し、チーム全体（AI含む）で認識を同期させてください。
