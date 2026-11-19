@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-18
 
-**Status**: Draft
+**Status**: Completed
 
 **Input**: User description: "GitHub Issue #30: PC新規登録時にECSのUsersテーブル権限不足等で登録が失敗・固まる問題の修正"
 
