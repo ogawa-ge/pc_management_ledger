@@ -1,8 +1,11 @@
-description = "Detect Git remote URL for GitHub integration"
+---
+description: Detect Git remote URL for GitHub integration
+name: speckit-git-remote
+---
 
-# Source: git
 
-prompt = """
+<!-- Extension: git -->
+<!-- Config: .specify/extensions/git/ -->
 # Detect Git Remote URL
 
 Detect the Git remote URL for integration with GitHub services (e.g., issue creation).
@@ -44,4 +47,3 @@ Supported URL formats:
 If Git is not installed, the directory is not a Git repository, or no remote is configured:
 - Return an empty result
 - Do NOT error — other workflows should continue without Git remote information
-"""
