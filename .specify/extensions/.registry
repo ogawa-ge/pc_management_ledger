@@ -8,14 +8,14 @@
       "enabled": true,
       "priority": 10,
       "registered_commands": {
-        "gemini": [
+        "claude": [
           "speckit.git.feature",
           "speckit.git.validate",
           "speckit.git.remote",
           "speckit.git.initialize",
           "speckit.git.commit"
         ],
-        "claude": [
+        "cline": [
           "speckit.git.feature",
           "speckit.git.validate",
           "speckit.git.remote",

@@ -1,16 +1,19 @@
-description = "Create a feature branch with sequential or timestamp numbering"
+---
+description: Create a feature branch with sequential or timestamp numbering
+name: speckit-git-feature
+---
 
-# Source: git
 
-prompt = """
+<!-- Extension: git -->
+<!-- Config: .specify/extensions/git/ -->
 # Create Feature Branch
 
-Create and switch to a new git feature branch for the given specification. This command handles **branch creation only** — the spec directory and files are created by the core `/speckit.specify` workflow.
+Create and switch to a new git feature branch for the given specification. This command handles **branch creation only** — the spec directory and files are created by the core `/speckit-specify` workflow.
 
 ## User Input
 
 ```text
-{{args}}
+$ARGUMENTS
 ```
 
 You **MUST** consider the user input before proceeding (if not empty).
@@ -66,4 +69,3 @@ If Git is not installed or the current directory is not a Git repository:
 The script outputs JSON with:
 - `BRANCH_NAME`: The branch name (e.g., `003-user-auth` or `20260319-143022-user-auth`)
 - `FEATURE_NUM`: The numeric or timestamp prefix used
-"""

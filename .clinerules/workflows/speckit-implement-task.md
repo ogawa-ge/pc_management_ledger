@@ -1,6 +1,3 @@
-description = "Implement SPECIFIC tasks by providing their Task IDs as arguments."
-
-prompt = """
 ---
 description: Implement ONLY the specifically requested tasks from tasks.md.
 ---
@@ -11,7 +8,7 @@ $ARGUMENTS
 ```
 
 ## Critical Execution Rules
-1. **REQUIREMENT**: You MUST check the User Input ($ARGUMENTS). If the user did not provide any specific Task IDs, you MUST STOP immediately and ask the user to provide Task IDs (e.g., `/speckit.implement-task Task-1`).
+1. **REQUIREMENT**: You MUST check the User Input ($ARGUMENTS). If the user did not provide any specific Task IDs, you MUST STOP immediately and ask the user to provide Task IDs (e.g., `/speckit-implement-task Task-1`).
 2. **STRICT ISOLATION**: Implement ONLY the Task IDs specified in the user input. Do NOT automatically proceed to the next incomplete task.
 
 ## Outline
@@ -31,4 +28,3 @@ $ARGUMENTS
 4. **Completion & HALT**:
    - Summarize what was implemented.
    - **STOP EXECUTION.** Do NOT start or suggest starting the next task on your own. Wait for the user's next command.
-"""

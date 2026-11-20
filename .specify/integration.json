@@ -1,10 +1,10 @@
 {
-  "version": "0.16.4.dev0",
+  "version": "1.4.3",
   "integration_state_schema": 1,
   "installed_integrations": [
     "cline",
-    "gemini",
-    "claude"
+    "claude",
+    "agy"
   ],
   "integration_settings": {
     "cline": {
@@ -15,9 +15,9 @@
       "script": "ps",
       "invoke_separator": "-"
     },
-    "gemini": {
+    "agy": {
       "script": "ps",
-      "invoke_separator": "."
+      "invoke_separator": "-"
     }
   },
   "integration": "cline",

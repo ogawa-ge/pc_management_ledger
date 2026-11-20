@@ -1,6 +1,3 @@
-description = "Perform pre-implementation environment and checklist verification."
-
-prompt = """
 ---
 description: Perform pre-implementation environment and checklist verification.
 ---
@@ -15,5 +12,4 @@ description: Perform pre-implementation environment and checklist verification.
    - If ANY checklist is incomplete, display the table, **STOP** and ask: "Some checklists are incomplete. Do you want to proceed with implementation anyway? (yes/no)". Wait for user response.
    - If ALL checklists are complete, display the table and automatically proceed.
 
-3. Do NOT load `plan.md` or `tasks.md`. Report that the check is complete and prompt the user to run `/speckit.implement-ignores`.
-"""
+3. Do NOT load `plan.md` or `tasks.md`. Report that the check is complete and prompt the user to run `/speckit-implement-ignores`.

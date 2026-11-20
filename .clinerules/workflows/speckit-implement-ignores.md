@@ -1,6 +1,3 @@
-description = "Setup project ignore files based on the technical plan."
-
-prompt = """
 ---
 description: Setup project ignore files based on the technical plan.
 ---
@@ -14,5 +11,4 @@ description: Setup project ignore files based on the technical plan.
    - Append missing critical patterns only if the file exists. Create with full pattern set if missing.
    - Common patterns: `node_modules/`, `dist/`, `build/`, `.env*`, `coverage/`, `*.log`, `__pycache__/`, `.venv/`, `target/`, `bin/`, `obj/`, etc.
 
-3. Report that the ignore files are set up, and prompt the user to execute specific tasks using `/speckit.implement-task <TaskID>`.
-"""
+3. Report that the ignore files are set up, and prompt the user to execute specific tasks using `/speckit-implement-task <TaskID>`.
