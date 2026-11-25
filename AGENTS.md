@@ -51,11 +51,11 @@ TypeScript (Next.js), Python (FastAPI, AWS CDK): Follow standard conventions
 - **Ubiquitous Language**: 変数名・カラム名・ファイル名は `docs/ubiquitous-language.md` の定義を正守し、新しい用語が登場した際は実装前に同ドキュメントを更新すること。
 
 ### 4. 複数人開発・運用ルール
-- **Issue 単位のブランチ＆ドキュメント管理**: 開発は必ず Issue ごとにブランチを切り、`specs/<issue-number>-<feature-name>/` 内で `spec.md` / `plan.md` / `tasks.md` を閉じて管理すること。コンフリクト防止のため、`docs/session-notes.md` や `docs/backlog.md` の日常的なタスク管理への使用は控えること。
+- **Issue 単位のブランチ＆ドキュメント管理**: 開発は必ず Issue ごとにブランチを切り、`specs/issue-<issue番号>-<feature-name>/` 内で `spec.md` / `plan.md` / `tasks.md` を閉じて管理すること。コンフリクト防止のため、`docs/session-notes.md` や `docs/backlog.md` の日常的なタスク管理への使用は控えること。
 - **Spec Kit（`/speckit-specify`）実行時のブランチ・ディレクトリ命名ルール**:
   - デフォルトの連番（`00x-...`）での自動採番は使わず、必ず GitHub Issue 番号を用いること（依頼に Issue 番号が含まれていない場合は、実行前に必ずユーザーへ確認すること）。
   - ブランチ作成フック（`speckit.git.feature`）実行時は、環境変数 `GIT_BRANCH_NAME` に `issue-<issue番号>-<feature-name>`（例: `issue-34-update-spec-kit`）を設定して実行すること。
-  - 仕様ディレクトリは `SPECIFY_FEATURE_DIRECTORY` として `specs/<issue番号>-<feature-name>`（例: `specs/34-update-spec-kit`）を明示指定すること。
+  - 仕様ディレクトリは `SPECIFY_FEATURE_DIRECTORY` として `specs/issue-<issue番号>-<feature-name>`（例: `specs/issue-34-update-spec-kit`）を明示指定すること。
 - **厳格なスコープ制限（変更の最小化）**: **担当する Issue の目的から外れたファイル・コードの変更、他画面の修正、無関係なリファクタリングは厳禁**。変更箇所は必要最小限に留め、他ブランチとのマージコンフリクトを防ぐこと。
 - **ナレッジ共有**: 全体に影響する重要なアーキテクチャ決定や、他メンバーにも共有すべき重大なバグ・解決策のみ、例外的に `docs/troubleshooting.md` や `docs/ubiquitous-language.md` へ追記すること。
 
