@@ -36,3 +36,22 @@ ECS を再デプロイして新しいコードを反映したあと、次を行�
 
 - 5 回とも「通信エラー」にならず、10 秒以内に各項目がフォームに反映される。
 - Lambda のログ（`/aws/lambda/LambdaStack-ApiLambda...`）に `POST /api/pcs/parse-specs 502` が出ていない。
+
+## 検証結果（2026-11-25）
+
+### 1. 既存の自動テスト（T001・T003）
+
+- 実行方法: リポジトリのルートで `backend/ecs/venv` の Python から `pytest backend/ecs/tests` を実行（`GEMINI_API_KEY` なし、`test_gemini_api_key.py` と `test_gemini_direct.py` を除外）。ルート直下の `.venv` には pytest が入っていないため、`backend/ecs/venv` を使った。`backend/ecs` から実行すると `test_naming_convention.py` が `backend.ecs...` を import できずに失敗するため、ルートから実行する。
+- 変更前（T001）: 60 passed
+- 変更後（T003）: 60 passed（新たな失敗なし）
+
+### 2. ローカルでの実呼び出し（T004）
+
+変更後の `parse_specs` をサンプル入力で 2 回呼び出した結果:
+
+| 回 | 時間 | 欠けている項目 |
+|---|---|---|
+| 1 | 5.7 秒 | なし |
+| 2 | 1.2 秒 | なし |
+
+抽出結果（2 回とも同じ）: `cpu`: Intel(R) Core(TM) i5-1235U / `memory`: 15.7 / `storage`: 476.9 / `os`: Microsoft Windows 11 Pro / `manufacturer`: Dell Inc. / `model`: Latitude 5430 / `gpu`: Intel(R) Iris(R) Xe Graphics / `pcName`: SAMPLE-PC
