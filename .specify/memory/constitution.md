@@ -1,11 +1,11 @@
 <!--
 Sync Impact Report
-- Version change: 1.1.0 -> 1.1.1
-- Modified principles: Layer 3 / Code Standard / Naming Convention
-- Added sections: Governance
+- Version change: 1.1.1 -> 1.1.2
+- Modified principles: Layer 4 / Feature-based Documentation（ブランチ名および仕様ディレクトリ命名を issue-<issue-number>-<feature-name> / specs/issue-<issue-number>-<feature-name>/ へ統一）
+- Added sections: N/A
 - Removed sections: N/A
-- Templates requiring updates: N/A（実行時に本Constitutionを参照するため変更不要）
-- Follow-up TODOs: N/A
+- Templates requiring updates: N/A（AGENTS.md へ反映済み）
+- Follow-up TODOs: N/A（既存の specs/ 配下ディレクトリは過去資産として維持し、新規 Issue から適用）
 -->
 
 # Project Constitution: PC Management Ledger
@@ -44,7 +44,7 @@ AIアシスタントは、本プロジェクトの全工程において以下の
 
 1. **Feature-based Documentation (機能/Issue単位のドキュメント管理)**:
    * グローバルな docs/session-notes.md や docs/backlog.md は複数人開発ではコンフリクトの原因となるため、日常的なタスク管理としての使用は控える。
-   * 開発は必ずIssueごとにブランチを切り、specs/<issue-number>-<feature-name>/ ディレクトリ内に spec.md (仕様), plan.md (実装計画),    tasks.md (進行状況) を作成し、Issue単位でドキュメントを閉じて管理すること。
+   * 開発は必ずIssueごとに `issue-<issue-number>-<feature-name>` ブランチを切り、`specs/issue-<issue-number>-<feature-name>/` ディレクトリ内に `spec.md` (仕様), `plan.md` (実装計画), `tasks.md` (進行状況) を作成し、Issue単位でドキュメントを閉じて管理すること。
 2. **Strict Scope Boundaries (厳格なスコープ制限と変更の最小化)**:
    * 複数人が同時に異なる機能を開発しているため、**自身が担当するIssue（バグ修正や機能追加）の目的から外れたファイルやコードの変更、他画面の修正、無関係なリファクタリングは厳禁（ご法度）**とする。
    * 変更箇所は必要最小限に留め、他ブランチとのマージコンフリクトを極力発生させないこと。
@@ -58,4 +58,4 @@ AIアシスタントは、本プロジェクトの全工程において以下の
 * バージョンはセマンティックバージョニングに従う。後方互換の明確化はPATCH、原則の追加または実質的拡張はMINOR、既存原則の削除または後方互換性のない変更はMAJORとする。
 * Constitution違反は仕様分析および計画レビューでCRITICALとして扱い、実装開始前に成果物またはConstitutionを明示的に修正しなければならない。
 
-**Version**: 1.1.1 | **Ratified**: 2026-04-14 | **Last Amended**: 2026-08-14
+**Version**: 1.1.2 | **Ratified**: 2026-04-14 | **Last Amended**: 2026-11-25
