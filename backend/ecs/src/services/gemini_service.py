@@ -134,7 +134,7 @@ def parse_specs(specs_text: str) -> Dict[str, Any]:
         return {"error": "Empty input text"}
 
     sanitized_text = _sanitize_specs_text(specs_text)
-    api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={api_key}"
+    api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key={api_key}"
     prompt = _build_prompt(sanitized_text)
 
     last_error_message = "Unknown error"
