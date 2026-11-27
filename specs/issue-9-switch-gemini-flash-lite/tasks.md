@@ -50,9 +50,9 @@ description: "Task list for Issue #9: AI抽出モデルの軽量モデルへの�
 - [X] T002 [US1] `backend/ecs/src/services/gemini_service.py` の `parse_specs` 内の API URL のモデル名を `gemini-3.6-flash` から `gemini-3.5-flash-lite` に変更する。プロンプト・リトライ・送信前の除外処理（FR-008）・戻り値の形式は変更しない（FR-004、[research.md](./research.md) Decision 4）
 - [X] T003 [US1] T001 と同じ既存テストを同じ条件（`GEMINI_API_KEY` なし、同じ2ファイルを除外）で再度実行し、T001 の結果から新たな失敗が増えていないことを確認する（`backend/ecs/tests`）
 - [X] T004 [US1] [quickstart.md](./quickstart.md) §2 に従い、`GEMINI_API_KEY` を環境変数で渡して `backend/ecs/src/services/gemini_service.py` の `parse_specs` をサンプル入力で実際に呼び、数秒以内に結果が返ることと、`memory`・`storage` が GB 単位・小数点第1位までの数値であることを確認する（SC-003、[data-model.md](./data-model.md) の AI抽出結果 `memory`・`storage`）。キーの入力はユーザーが行い、キーをファイルやチャットに残さない
-- [ ] T005 [US1] 変更をコミットし、`main` への PR を作成する（ブランチ `issue-9-switch-gemini-flash-lite`、Refs #9）。PR のマージはチームの手順に従う
-- [ ] T006 [US1] PR のマージ後、`infrastructure/stacks/ecs_stack.py` の EcsStack を再デプロイして本番の ECS に新しいコードを反映する。デプロイの実施者・方法（CDK を誰が実行するか、`--exclusively` で EcsStack のみにするか）は、実施前にユーザーに確認する
-- [ ] T007 [US1] [quickstart.md](./quickstart.md) §3 に従い本番で AI 抽出を 5 回続けて実行し、通信エラーにならず 10 秒以内に反映されることを確認する。あわせて Lambda のログ（`/aws/lambda/LambdaStack-ApiLambda...`）に `POST /api/pcs/parse-specs 502` が出ていないことを確認する（SC-001）
+- [X] T005 [US1] 変更をコミットし、`main` への PR を作成する（ブランチ `issue-9-switch-gemini-flash-lite`、Refs #9）。PR のマージはチームの手順に従う
+- [X] T006 [US1] PR のマージ後、`infrastructure/stacks/ecs_stack.py` の EcsStack を再デプロイして本番の ECS に新しいコードを反映する。デプロイの実施者・方法（CDK を誰が実行するか、`--exclusively` で EcsStack のみにするか）は、実施前にユーザーに確認する
+- [X] T007 [US1] [quickstart.md](./quickstart.md) §3 に従い本番で AI 抽出を 5 回続けて実行し、通信エラーにならず 10 秒以内に反映されることを確認する。あわせて Lambda のログ（`/aws/lambda/LambdaStack-ApiLambda...`）に `POST /api/pcs/parse-specs 502` が出ていないことを確認する（SC-001）
 
 **Checkpoint**: 本番で AI 抽出が使える状態になる（MVP）
 
@@ -66,7 +66,7 @@ description: "Task list for Issue #9: AI抽出モデルの軽量モデルへの�
 
 ### Implementation for User Story 2
 
-- [ ] T008 [US2] T004 の抽出結果（ローカル）と T007 の抽出結果（本番、実機の PowerShell の出力）について、[data-model.md](./data-model.md) の AI抽出結果の 8 項目（`cpu`, `memory`, `storage`, `os`, `manufacturer`, `model`, `gpu`, `pcName`）がすべて入っており、`cpu`・`os`・`manufacturer`・`model`・`gpu`・`pcName` が元データと矛盾しないことを確認する。GB 値の換算方法（1000単位か1024単位か）の違いは問題としない（[research.md](./research.md) Decision 3）
+- [X] T008 [US2] T004 の抽出結果（ローカル）と T007 の抽出結果（本番、実機の PowerShell の出力）について、[data-model.md](./data-model.md) の AI抽出結果の 8 項目（`cpu`, `memory`, `storage`, `os`, `manufacturer`, `model`, `gpu`, `pcName`）がすべて入っており、`cpu`・`os`・`manufacturer`・`model`・`gpu`・`pcName` が元データと矛盾しないことを確認する。GB 値の換算方法（1000単位か1024単位か）の違いは問題としない（[research.md](./research.md) Decision 3）
 
 **Checkpoint**: User Story 1 と 2 の両方が確認済みになる
 
@@ -76,7 +76,7 @@ description: "Task list for Issue #9: AI抽出モデルの軽量モデルへの�
 
 **Purpose**: 記録と後片付け
 
-- [ ] T009 確認結果（T001・T003 のテスト結果、T004・T007 の応答時間と抽出結果）を `specs/issue-9-switch-gemini-flash-lite/quickstart.md` の末尾に記録し、`specs/issue-9-switch-gemini-flash-lite/spec.md` の Status を `Completed` に更新する
+- [X] T009 確認結果（T001・T003 のテスト結果、T004・T007 の応答時間と抽出結果）を `specs/issue-9-switch-gemini-flash-lite/quickstart.md` の末尾に記録し、`specs/issue-9-switch-gemini-flash-lite/spec.md` の Status を `Completed` に更新する
 - [ ] T010 すべての確認が終わったら、ユーザーの確認を得たうえで GitHub Issue #9 をクローズする（`specs/002-ai-pc-info-extraction/spec.md` の Status を更新するかどうかもユーザーに確認する）
 
 ---
