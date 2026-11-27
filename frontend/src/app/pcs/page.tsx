@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { PC } from '@/types/pc';
 import Link from 'next/link';
-import { getStatusDisplay, getStatusColor } from '@/lib/utils';
+import { getStatusDisplay, getStatusColor, formatSpecValue } from '@/lib/utils';
 import { signOut, useSession } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
@@ -180,7 +180,7 @@ const PcsPage: React.FC<PcsPageProps> = ({ initialPcs = [] }) => {
                 <tr key={pc.pcId}>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{pc.pcId}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{pc.ownerName || '未割り当て'}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{pc.modelName}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatSpecValue(pc.model)}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                       getStatusColor(pc.status)

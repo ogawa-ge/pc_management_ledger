@@ -6,7 +6,8 @@ from src.models.base import BaseApiModel
 
 class Pc(BaseApiModel):
     pc_id: str
-    owner_id: str
+    owner_id: Optional[str] = None
+    owner_name: Optional[str] = None
     type: str
     status: str = "Unused"  # InUse, Unused, PendingDisposal, Disposed
     pc_name: Optional[str] = None

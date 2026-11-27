@@ -348,39 +348,104 @@ def get_users(
     except Exception as e:
         raise HTTPException(status_code=503, detail="Failed to get users") from e
 
+def _format_user_display_name(user: User) -> str:
+    if user.name and user.name.strip():
+        return user.name.strip()
+    if user.email and user.email.strip():
+        return user.email.strip()
+    return "不明なユーザー"
+
+
+def _resolve_owner_name(
+    item: Dict[str, Any],
+    *,
+    user_map: Optional[Dict[str, str]] = None,
+    user_repository: Optional[UserRepository] = None,
+) -> Optional[str]:
+    status = item.get("status")
+    owner_id = item.get("ownerId") or item.get("owner_id")
+    if status != "InUse" or not owner_id:
+        return None
+    if user_map is not None:
+        return user_map.get(owner_id, "不明なユーザー")
+    if user_repository is not None:
+        user = user_repository.get_user_by_id(owner_id)
+        return _format_user_display_name(user) if user else "不明なユーザー"
+    return "不明なユーザー"
+
+
 @app.get("/api/pcs", response_model=List[Pc])
-def get_pcs(status: str = None) -> List[Pc]:
+def get_pcs(
+    status: Optional[str] = None,
+    user_repository: UserRepository = Depends(get_user_repository),
+) -> List[Pc]:
     """
     PC 一覧を取得する
-    
+
     Query Parameters:
     - status: PC のステータスでフィルタリング (InUse, Unused, PendingDisposal, Disposed)
     """
     try:
-        table = dynamodb.Table('PCs')
-        
+        table = dynamodb.Table(os.getenv("PCS_TABLE_NAME", "PCs"))
+        scan_kwargs: Dict[str, Any] = {}
         if status:
             # status でフィルタリング (status は予約語のため ExpressionAttributeNames を使用)
-            filter_expression = "#st = :status"
-            expression_attribute_names = {
-                "#st": "status"
+            scan_kwargs["FilterExpression"] = "#st = :status"
+            scan_kwargs["ExpressionAttributeNames"] = {"#st": "status"}
+            scan_kwargs["ExpressionAttributeValues"] = {":status": status}
+
+        pcs_data: List[Dict[str, Any]] = []
+        while True:
+            response = table.scan(**scan_kwargs)
+            pcs_data.extend(response.get("Items", []))
+            last_evaluated_key = response.get("LastEvaluatedKey")
+            if not last_evaluated_key:
+                break
+            scan_kwargs["ExclusiveStartKey"] = last_evaluated_key
+
+        has_in_use_with_owner = any(
+            item.get("status") == "InUse" and (item.get("ownerId") or item.get("owner_id"))
+            for item in pcs_data
+        )
+        user_map: Dict[str, str] = {}
+        if has_in_use_with_owner:
+            users = user_repository.get_all_users()
+            user_map = {
+                user.user_id: _format_user_display_name(user)
+                for user in users
             }
-            expression_attribute_values = {
-                ":status": status
-            }
-            response = table.scan(
-                FilterExpression=filter_expression,
-                ExpressionAttributeNames=expression_attribute_names,
-                ExpressionAttributeValues=expression_attribute_values
-            )
-        else:
-            # 全 PC を取得
-            response = table.scan()
-        
-        pcs_data = response.get('Items', [])
-        return [Pc(**item) for item in pcs_data]
+
+        return [
+            Pc(**{**item, "ownerName": _resolve_owner_name(item, user_map=user_map)})
+            for item in pcs_data
+        ]
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get PCs: {str(e)}")
+
+
+@app.get("/api/pcs/{pc_id}", response_model=Pc)
+def get_pc_by_id(
+    pc_id: str,
+    user_repository: UserRepository = Depends(get_user_repository),
+) -> Pc:
+    """
+    指定された管理番号の PC 詳細情報を取得する
+    """
+    try:
+        table = dynamodb.Table(os.getenv("PCS_TABLE_NAME", "PCs"))
+        response = table.get_item(Key={"pcId": pc_id})
+        item = response.get("Item")
+        if not item:
+            raise HTTPException(status_code=404, detail=f"PC not found: {pc_id}")
+
+        owner_name = _resolve_owner_name(item, user_repository=user_repository)
+        return Pc(**{**item, "ownerName": owner_name})
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get PC: {str(e)}")
 
 @app.post("/api/pcs/{pc_id}/return")
 async def return_pc_endpoint(

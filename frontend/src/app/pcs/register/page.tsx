@@ -151,8 +151,13 @@ const PCRegisterPage = () => {
       return;
     }
 
-    // FR-009: 重要項目（モデル名）が未入力の場合は警告するが、登録はブロックしない
-    setRequiredFieldWarning(model.trim() ? null : 'モデル名が未入力です。可能であれば入力してください。');
+    // FR-003: モデル名は画面上で必須入力とする（AI抽出で取得できなかった場合も手入力を促す）
+    if (!model.trim()) {
+      setRequiredFieldWarning('モデル名は必須です。AI抽出で取得できなかった場合は手動で入力してください。');
+      setRegistrationError('モデル名を入力してください。');
+      return;
+    }
+    setRequiredFieldWarning(null);
 
     setIsSubmitting(true);
     setRegistrationError(null);
@@ -168,7 +173,7 @@ const PCRegisterPage = () => {
       // FR-005: 自動反映後に手動で編集された値も含め、現在のフォームstateから登録データを構築する
       const result = await registerPC(
         ownerId,
-        { cpu, memory, storage, os, manufacturer, model, gpu, pcName },
+        { cpu, memory, storage, os, manufacturer, model: model.trim(), gpu, pcName },
         'N',
         session?.user?.id,
         retryOptions,
@@ -404,12 +409,18 @@ const PCRegisterPage = () => {
             </div>
 
             <div className="form-group">
-              <label htmlFor="model">モデル</label>
+              <label htmlFor="model">モデル *</label>
               <input
                 type="text"
                 id="model"
                 value={model}
-                onChange={(e) => setModel(e.target.value)}
+                onChange={(e) => {
+                  setModel(e.target.value);
+                  if (e.target.value.trim()) {
+                    setRequiredFieldWarning(null);
+                  }
+                }}
+                required
               />
               {requiredFieldWarning && (
                 <p role="alert" aria-live="polite" className="warning-message">
