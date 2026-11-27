@@ -95,7 +95,7 @@ description: "Task list for Issue #33: PC一覧の表示不整合修正および
 **Purpose**: 全体の自動テスト・型チェック・ビルド・スコープ外変更がないことを最終検証する
 
 - [X] T015 `backend/ecs/` で `pytest` を実行し、`backend/ecs/tests/test_pc_list_and_detail_api.py` および既存テスト全件（`test_naming_convention.py` 等を含む）がパスすることを確認する
-- [ ] T016 `frontend/` で `npx tsc --noEmit` および `npm run build` を実行し、TypeScript 型エラーおよびビルドエラーがないことを確認する（※ローカルに `frontend/node_modules` が未導入のためコマンド未実行・コード目視精査のみ完了。`npm ci` 後または Amplify ビルドで検証要）
+- [X] T016 `frontend/` で `npx tsc --noEmit` および `npm run build` を実行し、TypeScript 型エラーおよびビルドエラーがないことを確認する（※ローカルに `frontend/node_modules` 未導入のため、AWS Amplify の自動ビルド（`next build`）成功および本番実機検証にて完了確認）
 - [X] T017 `specs/33-fix-pc-list-and-detail/quickstart.md` の検証項目および `git diff --stat` を確認し、Issue #33 のスコープ外ファイルに変更がないことを確認する
 
 ---

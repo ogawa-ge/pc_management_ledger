@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-25
 
-**Status**: Draft
+**Status**: Completed
 
 **Input**: User description: "Issue #33: PC一覧のユーザー名・モデル名表示不整合および詳細画面404（未実装）の修正"
 
