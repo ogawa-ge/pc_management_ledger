@@ -4,7 +4,9 @@
 
 **Created**: 2026-08-12
 
-**Status**: Draft
+**Status**: Completed
+
+**Completion Note**（2026-11-27）: 本機能は `main` に取り込まれ、本番で動作している。AWS 環境移行後に本番で発生した AI 抽出の失敗は、同じ Issue #9 の再対応 [specs/issue-9-switch-gemini-flash-lite/](../issue-9-switch-gemini-flash-lite/spec.md)（Gemini モデルの切り替え、PR #35）で解決し、本番で確認済み。本仕様の未完了タスク（T001・T019・T021）は、この再対応をもって解決（キャンセル）とした（[tasks.md](./tasks.md) の Notes を参照）。
 
 **Input**: GitHub Issue #9「AIによるPC情報取得機能が未実装」: AIによるPC情報取得機能が実装されていない。想定機能: 1) ターミナルで実行されたスペック情報の結果を受け取る（PowerShellの `Get-ComputerInfo | Select-Object WindowsProductName, WindowsVersion, TotalPhysicalMemory, BiosSerialNumber, ProcessorName, GPUName | ConvertTo-Json` の実行結果） 2) Gemini等のAI APIを使用して必要なデータ項目のみを抽出・整形 3) 整形されたデータをフォームに反映する。
 

@@ -18,7 +18,7 @@ Webアプリケーション構成（001-pc-managementと同一）: `frontend/src
 
 **Purpose**: ローカル開発環境の確認（新規プロジェクト初期化は不要）
 
-- [ ] T001 [quickstart.md](./quickstart.md) の Prerequisites に従い、`frontend`（`npm run dev`）と `backend/ecs`（`uvicorn src.main:app --reload`）のローカル起動、および `GEMINI_API_KEY` 環境変数の設定を確認する
+- [X] T001 **【キャンセル（2026-11-27）】** [quickstart.md](./quickstart.md) の Prerequisites に従い、`frontend`（`npm run dev`）と `backend/ecs`（`uvicorn src.main:app --reload`）のローカル起動、および `GEMINI_API_KEY` 環境変数の設定を確認する
 
 ---
 
@@ -79,9 +79,9 @@ Webアプリケーション構成（001-pc-managementと同一）: `frontend/src
 
 **Purpose**: 全体検証と回帰確認
 
-- [ ] T019 [P] [quickstart.md](./quickstart.md) のシナリオ1〜4を実機（Windows 11 / PowerShell）で実行し、結果を記録する — **未実施**: 実機・実際のGemini API呼び出し・実ログインセッションが必要なため、実装エージェントでは実行不可。ユーザーによる手動実施が必要。
+- [X] T019 [P] **【キャンセル（2026-11-27）】** [quickstart.md](./quickstart.md) のシナリオ1〜4を実機（Windows 11 / PowerShell）で実行し、結果を記録する — **未実施**: 実機・実際のGemini API呼び出し・実ログインセッションが必要なため、実装エージェントでは実行不可。ユーザーによる手動実施が必要。
 - [X] T020 [P] `frontend/src/app/pcs/register/page.tsx` について、[quickstart.md](./quickstart.md) のa11yチェックリスト（label関連付け、Tab順序、`aria-live`、`aria-busy`、色以外でのエラー表現）を確認する（FR-010）— コードレベルで確認済み（label の htmlFor 関連付け、tabindex 不使用による自然なDOM順、role="alert"/aria-live、aria-busy、テキストベースのエラー表示、globals.cssでのoutline除去なし）。ブラウザでの実機確認はT019に含めて実施のこと。
-- [ ] T021 001-pc-managementの管理者代理登録画面（US3、`register/page.tsx`を一般ユーザー自己登録と共用）で、管理者としてログインした状態でも貼り付け入力欄・AI自動抽出・手動編集が同様に動作することを確認する（[quickstart.md](./quickstart.md) 参照）— **未実施**: 管理者アカウントでの実ログインセッションが必要なため、実装エージェントでは実行不可。ユーザーによる手動実施が必要。
+- [X] T021 **【キャンセル（2026-11-27）】** 001-pc-managementの管理者代理登録画面（US3、`register/page.tsx`を一般ユーザー自己登録と共用）で、管理者としてログインした状態でも貼り付け入力欄・AI自動抽出・手動編集が同様に動作することを確認する（[quickstart.md](./quickstart.md) 参照）— **未実施**: 管理者アカウントでの実ログインセッションが必要なため、実装エージェントでは実行不可。ユーザーによる手動実施が必要。
 
 ---
 
@@ -143,4 +143,5 @@ Task: "frontend/src/app/pcs/register/page.tsx に貼り付け用textareaを追�
 - `page.tsx`への変更が多いUser Story 1・2は同一ファイルへの逐次変更が中心となり、並行実行の余地は限定的
 - 各タスク完了後、論理的な区切りでコミットすることを推奨（`/speckit-git-commit`）
 - 各チェックポイントで [quickstart.md](./quickstart.md) の該当シナリオを確認してから次フェーズに進むこと
+- **未完了タスクのキャンセル（2026-11-27）**: T001・T019・T021 は、同じ Issue #9 の再対応 [specs/issue-9-switch-gemini-flash-lite/](../issue-9-switch-gemini-flash-lite/tasks.md)（Gemini モデルの切り替え、PR #35）で本番での動作確認まで行い完了したため、本仕様では実施せず解決（キャンセル）とした。チェック済み（`[X]`）にしているが、タスクそのものを実施したという意味ではない。
 - T009は欠番。`docs/ubiquitous-language.md`への新用語（「貼り付け入力欄」「Gemini API呼び出しリトライ」）追加は計画時点で実施済みのため、実装タスクとしては計上していない（[plan.md](./plan.md) Constitution Check参照）
