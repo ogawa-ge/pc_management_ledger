@@ -14,6 +14,9 @@
 | **Owner ID** | オーナーID | PCとOwnerを紐付けるUserの一意な識別子。画面表示名ではなく、この値を登録APIへ送信する。 | `ownerId` / `User.userId` |
 | **Owner Candidate** | オーナー候補 | 管理者がPCの代理登録時に選択できる、Usersに登録済みのUser。 | `GET /api/users` の返却対象 |
 | **Available User** | 利用可能なユーザー | PC登録時の再確認においてUsersに存在するOwner Candidate。未定義の有効・無効属性は推測せず、削除済みまたは存在しないUserは含めない。 | Owner検証時のUser存在確認 |
+| **Owner Name** | オーナー名 | PC一覧・PC詳細で表示するOwnerの表示名。`Owner ID` から `Users` を引いて解決し、`name` を優先、未設定時は `email` を用いる。DBには保存せず、API応答時に都度解決する。 | `ownerName`（APIレスポンス / フロントエンド型） |
+| **Unassigned** | 未割り当て | PCに現在の利用者が割り当てられていない状態を示す画面表示。`Owner ID` が未設定のPC、およびステータスが「利用中（`InUse`）」以外（`Unused` / `PendingDisposal` / `Disposed`）のPCが該当する（DB上の `ownerId` は履歴として保持するが、表示上は未割り当てとする）。 | `ownerName = null` のときの表示文言 |
+| **Unknown User** | 不明なユーザー | ステータスが「利用中（`InUse`）」かつ `Owner ID` が設定されているが、対応するUserが `Users` に存在しない（削除済み等）場合の代替表示名。画面エラーを防ぎ、未割り当てと区別するために用いる。 | `ownerName = "不明なユーザー"` |
 
 ## 2. PC・デバイス関連 (PC & Device)
 

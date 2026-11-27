@@ -41,3 +41,25 @@ export const getStatusColor = (status: PC['status']): string => {
       return 'bg-gray-100 text-gray-800';
   }
 };
+
+/**
+ * 未設定・空文字・Unknown を "-" に正規化して表示する
+ */
+export const formatSpecValue = (value?: string | null): string => {
+  if (value == null) return '-';
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.toLowerCase() === 'unknown') {
+    return '-';
+  }
+  return trimmed;
+};
+
+/**
+ * PC種別を日本語表記へ変換する
+ */
+export const getPcTypeDisplay = (type?: string | null): string => {
+  const normalized = type?.trim();
+  if (normalized === 'Notebook' || normalized === 'N') return 'ノートパソコン';
+  if (normalized === 'Desktop' || normalized === 'D') return 'デスクトップパソコン';
+  return formatSpecValue(type);
+};

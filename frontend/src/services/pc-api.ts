@@ -38,6 +38,14 @@ export interface PcReturnResponse {
   recordId?: string;
 }
 
+export interface PcStatusUpdateResponse {
+  status: string;
+  pcId: string;
+  previousStatus: PC['status'];
+  newStatus: PC['status'];
+  updatedAt: string;
+}
+
 const MAX_RETRY_SECONDS = 180;
 
 const createIdempotencyKey = (): string => {
@@ -186,6 +194,48 @@ export const getPCs = async (status?: string, options: RetryOptions = {}) => {
   }
 };
 
+// PC詳細取得
+export const getPCById = async (pcId: string, options: RetryOptions = {}): Promise<PC> => {
+  try {
+    return await requestWithRetry<PC>(`/api/pcs/${encodeURIComponent(pcId)}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    }, options);
+  } catch (error) {
+    console.error('PC詳細取得エラー:', error);
+    throw error;
+  }
+};
+
+// PCステータス更新（管理者のみ）
+export const updatePCStatus = async (
+  pcId: string,
+  newStatus: PC['status'],
+  userId: string,
+  reason?: string,
+  options: RetryOptions = {},
+): Promise<PcStatusUpdateResponse> => {
+  try {
+    const trimmedReason = reason?.trim();
+    return await requestWithRetry<PcStatusUpdateResponse>(`/api/pcs/${encodeURIComponent(pcId)}/status`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${userId}`,
+      },
+      body: JSON.stringify({
+        newStatus,
+        ...(trimmedReason ? { reason: trimmedReason } : {}),
+      }),
+    }, options);
+  } catch (error) {
+    console.error('PCステータス更新エラー:', error);
+    throw error;
+  }
+};
+
 // ユーザー一覧取得
 export const getUsers = async (userId: string, options: RetryOptions = {}): Promise<User[]> => {
   try {
@@ -209,10 +259,11 @@ export const returnPC = async (
   options: RetryOptions = {},
 ) => {
   try {
-    return await requestWithRetry<PcReturnResponse>(`/api/pcs/${pcId}/return`, {
+    return await requestWithRetry<PcReturnResponse>(`/api/pcs/${encodeURIComponent(pcId)}/return`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...(returnData.userId ? { Authorization: `Bearer ${returnData.userId}` } : {}),
       },
       body: JSON.stringify(returnData),
     }, options);
